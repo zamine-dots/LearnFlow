@@ -427,15 +427,68 @@ ${ctx}
   async function callGemini(key, model, system) {
     const actualModel = model || "gemini-2.0-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${key}`;
+    
+    // Enhanced Gemini call with generation config
     const contents = conversationHistory.slice(-16).map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
-    const body = { contents, systemInstruction: { parts: [{ text: system }] } };
-    const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error?.message || "Gemini HTTP " + resp.status); }
+    
+    const body = {
+      contents,
+      systemInstruction: { parts: [{ text: system }] },
+      generationConfig: {
+        temperature: deepThinkMode ? 0.7 : 0.5,
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: deepThinkMode ? 8192 : 4096,
+      },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+      ],
+    };
+    
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    
+    if (!resp.ok) {
+      const errorText = await resp.text().catch(() => "");
+      let errorData = {};
+      try { errorData = JSON.parse(errorText); } catch {}
+      
+      if (resp.status === 429) {
+        throw new Error("Gemini rate limit exceeded — free tier allows 15 requests/minute. Wait a moment or upgrade your API tier.");
+      }
+      if (resp.status === 403) {
+        throw new Error("Gemini API key invalid or expired — get a fresh key from aistudio.google.com");
+      }
+      if (resp.status === 400) {
+        throw new Error("Gemini invalid request: " + (errorData.error?.details?.[0]?.reason || errorText));
+      }
+      throw new Error(errorData.error?.message || "Gemini HTTP " + resp.status);
+    }
+    
     const d = await resp.json();
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    
+    if (!d.candidates || d.candidates.length === 0) {
+      if (d.promptFeedback?.blockReason) {
+        throw new Error("Gemini blocked this content: " + d.promptFeedback.blockReason);
+      }
+      throw new Error("No response from Gemini");
+    }
+    
+    const candidate = d.candidates[0];
+    if (candidate.finishReason === "SAFETY") {
+      throw new Error("Gemini response blocked by safety filters");
+    }
+    
+    return candidate.content?.parts?.[0]?.text || "";
   }
 
   async function callOpenAICompat(url, key, model, system, extraHeaders = {}) {
@@ -484,6 +537,20 @@ ${ctx}
 
   function friendlyError(err) {
     const msg = (err.message || "").toLowerCase();
+    
+    // Gemini-specific errors first
+    if (msg.includes("gemini") || msg.includes("generativelanguage")) {
+      if (msg.includes("rate limit") || msg.includes("quota") || msg.includes("429"))
+        return "❌ **Gemini Rate Limit** — you've hit the API quota.\n\n💡 Free tier: 15 requests/minute. Wait ~1 minute or upgrade at aistudio.google.com\n\n🔄 Or switch to Groq/OpenRouter for unlimited free requests.";
+      if (msg.includes("api key") || msg.includes("unauthorized") || msg.includes("403"))
+        return "❌ **Invalid Gemini API Key** — the key was rejected.\n\n💡 Get a fresh key: https://aistudio.google.com/app/apikey\n\n📝 Keys start with `AIza…`";
+      if (msg.includes("blocked") || msg.includes("safety"))
+        return "⚠️ **Content Filtered** — Gemini blocked this request due to safety policies.\n\n💡 Try rephrasing your question or use a different provider.";
+      if (msg.includes("invalid request") || msg.includes("400"))
+        return "❌ **Invalid Request** — Gemini rejected the request format.\n\n💡 Try a simpler question or switch models.";
+    }
+    
+    // Generic errors
     if (msg.includes("insufficient balance") || msg.includes("insufficient_balance") || msg.includes("out of credits"))
       return "❌ Insufficient balance — your API key has run out of credits.\n\n💡 Top up at the provider's billing page, or switch to a free provider like **Groq** or **OpenRouter** in Settings.";
     if (msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("unauthorized") || msg.includes("authentication"))

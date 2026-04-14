@@ -5,14 +5,15 @@ const PROVIDERS = {
   gemini: {
     name: "Google Gemini", emoji: "🔵",
     keyUrl: "https://aistudio.google.com/app/apikey",
-    freeNote: "Free — aistudio.google.com",
+    freeNote: "Free tier available — aistudio.google.com",
     placeholder: "AIza…",
     keyLabel: "Google AI Studio API Key",
+    // Enhanced model metadata with context windows and capabilities
     models: [
-      { id: "gemini-2.0-flash",    label: "Gemini 2.0 Flash ✦ (recommended)" },
-      { id: "gemini-1.5-flash",    label: "Gemini 1.5 Flash (fast)" },
-      { id: "gemini-1.5-flash-8b", label: "Gemini 1.5 Flash-8B (lightest)" },
-      { id: "gemini-1.5-pro",      label: "Gemini 1.5 Pro (powerful)" },
+      { id: "gemini-2.0-flash",    label: "Gemini 2.0 Flash ✦ (recommended)", contextWindow: "1M tokens", speed: "fastest", multimodal: true },
+      { id: "gemini-1.5-flash",    label: "Gemini 1.5 Flash (fast)", contextWindow: "1M tokens", speed: "very fast", multimodal: true },
+      { id: "gemini-1.5-flash-8b", label: "Gemini 1.5 Flash-8B (lightest)", contextWindow: "1M tokens", speed: "fastest", multimodal: true },
+      { id: "gemini-1.5-pro",      label: "Gemini 1.5 Pro (powerful)", contextWindow: "2M tokens", speed: "moderate", multimodal: true },
     ],
   },
   groq: {
@@ -357,14 +358,71 @@ async function callProvider(messages, systemPrompt, isDeepThink = false) {
   const model = settings.activeModel || PROVIDERS[p].models[0].id;
 
   if (p === "gemini") {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + key;
+    const actualModel = model || "gemini-2.0-flash";
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + actualModel + ":generateContent?key=" + key;
+    
+    // Enhanced Gemini API call with better parameters
     const contents = messages.map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
-    const body = { contents };
-    if (systemPrompt) body.systemInstruction = { parts: [{ text: systemPrompt }] };
-    const resp = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
-    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message || "Gemini HTTP " + resp.status); }
+    const body = {
+      contents,
+      systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+      generationConfig: {
+        temperature: isDeepThink ? 0.7 : 0.5,
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: isDeepThink ? 8192 : 4096,
+      },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+      ],
+    };
+    
+    const resp = await fetch(url, { 
+      method:"POST", 
+      headers:{"Content-Type":"application/json"}, 
+      body:JSON.stringify(body) 
+    });
+    
+    // Enhanced error handling for Gemini-specific errors
+    if (!resp.ok) {
+      const errorText = await resp.text().catch(() => "");
+      let errorData = {};
+      try { errorData = JSON.parse(errorText); } catch {}
+      
+      const errorMsg = errorData.error?.message || errorText || "Gemini HTTP " + resp.status;
+      
+      // Gemini-specific error messages
+      if (resp.status === 429) {
+        throw new Error("Rate limit exceeded — Gemini API quota reached. Wait a moment or upgrade your API tier.");
+      }
+      if (resp.status === 403) {
+        throw new Error("API key invalid or expired — get a fresh key from aistudio.google.com");
+      }
+      if (resp.status === 400) {
+        throw new Error("Invalid request: " + (errorData.error?.details?.[0]?.reason || errorMsg));
+      }
+      throw new Error(errorMsg);
+    }
+    
     const d = await resp.json();
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    
+    // Handle Gemini response with better safety checks
+    if (!d.candidates || d.candidates.length === 0) {
+      if (d.promptFeedback?.blockReason) {
+        throw new Error("Content blocked by safety filters: " + d.promptFeedback.blockReason);
+      }
+      throw new Error("No response from Gemini");
+    }
+    
+    const candidate = d.candidates[0];
+    if (candidate.finishReason === "SAFETY") {
+      throw new Error("Response blocked by safety filters");
+    }
+    
+    return candidate.content?.parts?.[0]?.text || "";
   }
 
   if (p === "groq") {
@@ -404,6 +462,20 @@ async function callProvider(messages, systemPrompt, isDeepThink = false) {
 /* ── Error Helper ─────────────────────────────────────── */
 function friendlyError(err) {
   const msg = (err.message || "").toLowerCase();
+  
+  // Gemini-specific errors
+  if (msg.includes("gemini") || msg.includes("generativelanguage")) {
+    if (msg.includes("rate limit") || msg.includes("quota") || msg.includes("429"))
+      return "❌ **Gemini Rate Limit** — you've hit the API quota.\n\n💡 Free tier: 15 requests/minute. Wait ~1 minute or upgrade at aistudio.google.com\n\n🔄 Or switch to Groq/OpenRouter for unlimited free requests.";
+    if (msg.includes("api key") || msg.includes("unauthorized") || msg.includes("403"))
+      return "❌ **Invalid Gemini API Key** — the key was rejected.\n\n💡 Get a fresh key: https://aistudio.google.com/app/apikey\n\n📝 Keys start with `AIza…`";
+    if (msg.includes("blocked") || msg.includes("safety"))
+      return "⚠️ **Content Filtered** — Gemini blocked this request due to safety policies.\n\n💡 Try rephrasing your question or use a different provider.";
+    if (msg.includes("invalid request") || msg.includes("400"))
+      return "❌ **Invalid Request** — Gemini rejected the request format.\n\n💡 Try a simpler question or switch models in Settings.";
+  }
+  
+  // Generic provider errors
   if (msg.includes("insufficient balance") || msg.includes("insufficient_balance") || msg.includes("out of credits"))
     return "❌ Insufficient balance — your API key has run out of credits.\n\n💡 Top up at the provider's billing page, or switch to a free provider like Groq or OpenRouter in Settings.";
   if (msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("unauthorized") || msg.includes("authentication"))
