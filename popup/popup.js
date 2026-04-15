@@ -14,13 +14,13 @@ const PROVIDER = {
 };
 
 const QUICK_ACTIONS = {
-  summarize: "Summarize this page comprehensively — main thesis, key points, evidence, and conclusions.",
-  keypoints: "List the 7 most important key points from this page with brief explanations for each.",
-  simplify:  "Explain the main content of this page in simple, plain language that anyone can understand.",
-  critique:  "Critically analyze this content: main arguments, evidence quality, logical consistency, potential bias, credibility, and what's missing.",
-  data:      "What are the most important facts, statistics, numbers, and data points mentioned on this page?",
-  translate: "Translate the main content to English. If already in English, translate to French.",
-  solve:     "Solve this problem step-by-step. Show your reasoning clearly, explain each step, and provide the final answer with verification.",
+  summarize: "Provide a comprehensive yet concise summary of this content. Structure your response with:\n\n**Main Thesis** (1-2 sentences)\n**Key Points** (3-5 bullet points with brief explanations)\n**Evidence/Arguments** (what supports the main claims)\n**Conclusion** (what should the reader take away)\n\nBe precise, avoid fluff, and capture the essence.",
+  keypoints: "Extract the 7 most important key points from this content. For each point:\n\n• **Point Title** (bold, 3-5 words)\n  - One sentence explanation of why this matters\n  - Include specific details, numbers, or quotes when relevant\n\nPrioritize substance over surface details. Focus on what would matter most to someone trying to understand this topic deeply.",
+  simplify:  "Explain this content in simple, accessible language as if teaching a smart 14-year-old. Use:\n\n• Plain language (no jargon without explanation)\n• Concrete examples and analogies\n• Short sentences and clear structure\n• Define any technical terms immediately\n\nThe goal is clarity without dumbing down. Make complex ideas accessible, not simplistic.",
+  critique:  "Provide a rigorous critical analysis of this content. Address:\n\n**Arguments** (what claims are being made)\n**Evidence Quality** (strong/weak, sources, recency, sample sizes)\n**Logical Consistency** (any fallacies or gaps in reasoning)\n**Potential Bias** (author perspective, funding, selection bias)\n**Credibility** (expertise, track record, peer review)\n**What's Missing** (counterarguments, alternative explanations, key context)\n\nBe fair but thorough. Point out both strengths and weaknesses.",
+  data:      "Extract all significant facts, statistics, numbers, and data points from this content. Present as:\n\n• **Category/Topic** (group related data)\n  - Specific numbers with units\n  - Percentages, ratios, comparisons\n  - Dates, timeframes, trends\n  - Sample sizes, margins of error when mentioned\n\nInclude the actual numbers, not just descriptions. Quote precisely when possible.",
+  translate: "Translate the main content to clear, natural English. If the content is already in English, translate to French instead.\n\n• Preserve the original meaning and tone\n• Adapt idioms and cultural references appropriately\n• Maintain technical accuracy\n• Keep the structure similar to the original\n\nDo not add commentary or explanations—just translate.",
+  solve:     "Solve this problem methodically with clear, verifiable reasoning:\n\n**1. Understanding** (restate the problem, identify what's being asked)\n**2. Given Information** (list known facts, constraints, assumptions)\n**3. Approach** (explain your solution strategy and why)\n**4. Step-by-Step Solution** (show all work, explain each step)\n**5. Final Answer** (clearly state the result)\n**6. Verification** (check your answer, alternative method, sanity check)\n\nShow your reasoning at each step. Explain WHY, not just WHAT. If there are multiple approaches, mention them.",
 };
 
 const FORMAT_ICONS = { txt:"📄",md:"📝",html:"🌐",csv:"📊",json:"📋",js:"⚙️",py:"🐍",xml:"🏷",yaml:"📐",sql:"🗄",css:"🎨",zip:"🗜" };
@@ -107,8 +107,9 @@ function setupListeners() {
     chrome.storage.local.set({ theme: currentTheme });
   });
 
-  // Deep Think toggle button
-  document.getElementById("deepThinkBtn").addEventListener("click", () => {
+  // Deep Think toggle button - fixed to toggle properly
+  const deepThinkBtn = document.getElementById("deepThinkBtn");
+  deepThinkBtn.addEventListener("click", () => {
     settings.deepThink = !settings.deepThink;
     setToggle("toggleDeepThink", settings.deepThink);
     updateDeepThinkUI();
