@@ -133,41 +133,28 @@
     .sg-label{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;margin-top:14px;font-family:'IBM Plex Mono',monospace;}
     .sg-label:first-child{margin-top:0;}
 
-    /* Provider card grid */
-    .provider-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
-    .provider-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px 9px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;text-align:center;position:relative;}
-    .provider-card:hover:not(.selected){border-color:var(--muted);background:var(--surface2);}
-    .provider-card.selected{border-color:var(--accent);background:var(--accent-dim);}
-    .provider-card.has-key::after{content:'✓';position:absolute;top:5px;right:7px;font-size:9px;color:var(--success);font-weight:700;}
-    .provider-card-emoji{font-size:22px;line-height:1;}
-    .provider-card-name{font-weight:600;font-size:11.5px;color:var(--text);line-height:1.2;}
-    .provider-card-models{font-size:9.5px;color:var(--muted);line-height:1.3;font-family:'IBM Plex Mono',monospace;}
-    .provider-card.selected .provider-card-name{color:var(--accent);}
-    .provider-card[data-provider="deepseek"].selected .provider-card-name,
-    .provider-card[data-provider="openai"].selected .provider-card-name{color:var(--deep);}
-
-    /* Key area */
-    .provider-key-area{display:none;padding:10px 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:var(--radius);margin-bottom:10px;}
-    .provider-key-area.visible{display:block;}
-    .key-area-header{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
-    .key-area-emoji{font-size:15px;}
-    .key-area-title{font-size:11.5px;font-weight:600;color:var(--text);}
-    .key-area-sub{font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-left:auto;}
-    .key-row{display:flex;gap:6px;}
-    .key-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11.5px;outline:none;transition:border-color .15s;}
+    /* API Key area - simplified */
+    .api-key-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px;}
+    .api-key-box label{display:block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:7px;font-family:'IBM Plex Mono',monospace;}
+    .key-row{display:flex;gap:6px;margin-bottom:6px;}
+    .key-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11.5px;outline:none;transition:border-color .15s;}
     .key-input:focus{border-color:var(--accent);}
     .key-input::placeholder{color:var(--muted);}
     .key-save-btn{padding:7px 12px;background:var(--accent);border:none;border-radius:6px;color:#0d1117;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s;white-space:nowrap;}
     [data-theme="light"] .key-save-btn{color:#fff;}
     .key-save-btn:hover{opacity:.85;}
-    .key-status{font-size:10px;color:var(--muted);margin-top:5px;font-family:'IBM Plex Mono',monospace;}
+    .key-status{font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
     .key-status.ok{color:var(--success);}
-    .deep-think-note{font-size:10px;color:var(--deep);margin-top:4px;font-family:'IBM Plex Mono',monospace;display:none;}
+    .key-help{font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.4;}
+    .key-help a{color:var(--accent);text-decoration:none;}
+    .key-help a:hover{text-decoration:underline;}
 
-    /* Model select */
-    .model-select{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 11px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11.5px;outline:none;transition:border-color .15s;margin-bottom:10px;cursor:pointer;}
-    .model-select:focus{border-color:var(--accent);}
-    option{background:var(--surface2);}
+    /* Model info */
+    .model-info{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;}
+    .model-info-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+    .model-info-row:last-child{margin-bottom:0;}
+    .model-info-label{font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+    .model-info-value{font-size:11.5px;color:var(--text);font-weight:500;}
 
     /* Toggles */
     .setting-row{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:5px;}
@@ -188,7 +175,7 @@
     <div class="header-title">LearnFlow</div>
     <div class="header-sub">
       <span class="status-dot" id="statusDot"></span>
-      <span id="statusText">No provider set</span>
+      <span id="statusText">No API key set</span>
     </div>
   </div>
   <div class="header-btns">
@@ -210,7 +197,7 @@
     <div style="display:flex;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:4px;">
       <div class="provider-badge" id="providerBadge">
         <span id="badgeEmoji">⚙</span>
-        <span id="badgeText">Set up provider →</span>
+        <span id="badgeText">Set up Groq →</span>
       </div>
       <span class="deep-badge" id="deepThinkBadge" style="display:none;">🧠 Deep Think ON</span>
     </div>
@@ -241,6 +228,7 @@
       <div class="chip" data-action="critique">🔍 Critique</div>
       <div class="chip" data-action="data">📊 Facts & Data</div>
       <div class="chip" data-action="translate">🌐 Translate</div>
+      <div class="chip" data-action="solve">✏️ Solve</div>
       <div class="chip" data-action="sidebar">⚡ Full Sidebar</div>
     </div>
     <button class="sidebar-btn" id="openSidebarBtn">⚡ Open Full Research Sidebar</button>
@@ -292,48 +280,35 @@
 <div class="panel" id="panel-settings">
   <div class="settings-scroll" style="padding:13px;">
 
-    <div class="sg-label">// ai provider</div>
-    <div class="provider-grid" id="providerGrid">
-      <div class="provider-card" data-provider="gemini">
-        <div class="provider-card-emoji">🔵</div>
-        <div class="provider-card-name">Google Gemini</div>
-        <div class="provider-card-models">2.0 Flash / 1.5 Pro / Flash</div>
-      </div>
-      <div class="provider-card" data-provider="groq">
-        <div class="provider-card-emoji">⚡</div>
-        <div class="provider-card-name">Groq</div>
-        <div class="provider-card-models">Llama 3.3 / Mixtral / Gemma2</div>
-      </div>
-      <div class="provider-card" data-provider="openrouter">
-        <div class="provider-card-emoji">🔀</div>
-        <div class="provider-card-name">OpenRouter</div>
-        <div class="provider-card-models">DeepSeek R1 / Llama / Qwen free</div>
-      </div>
-      <div class="provider-card" data-provider="huggingface">
-        <div class="provider-card-emoji">🤗</div>
-        <div class="provider-card-name">HuggingFace</div>
-        <div class="provider-card-models">Llama / Qwen / Phi / Mistral</div>
-      </div>
-    </div>
-
-    <div class="provider-key-area" id="providerKeyArea">
-      <div class="key-area-header">
-        <span class="key-area-emoji" id="keyAreaEmoji">🔵</span>
-        <span class="key-area-title" id="keyAreaTitle">API Key</span>
-        <span class="key-area-sub" id="keyAreaSub"></span>
-      </div>
+    <div class="sg-label">// api key</div>
+    <div class="api-key-box">
+      <label>Groq API Key</label>
       <div class="key-row">
-        <input type="password" class="key-input" id="sharedKeyInput" placeholder="Paste your API key here…"/>
-        <button class="key-save-btn" id="sharedKeySaveBtn">Save</button>
+        <input type="password" class="key-input" id="apiKeyInput" placeholder="gsk_…"/>
+        <button class="key-save-btn" id="apiKeySaveBtn">Save</button>
       </div>
-      <div class="key-status" id="sharedKeyStatus"></div>
-      <div class="deep-think-note" id="deepThinkProviderNote"></div>
+      <div class="key-status" id="apiKeyStatus"></div>
+      <div class="key-help">
+        Get your free API key from <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a><br/>
+        Groq provides fast, free inference for Llama 3.3 70B.
+      </div>
     </div>
 
     <div class="sg-label">// model</div>
-    <select class="model-select" id="modelSelect">
-      <option value="">— select provider first —</option>
-    </select>
+    <div class="model-info">
+      <div class="model-info-row">
+        <span class="model-info-label">Model:</span>
+        <span class="model-info-value">Llama 3.3 70B</span>
+      </div>
+      <div class="model-info-row">
+        <span class="model-info-label">Context:</span>
+        <span class="model-info-value">128K tokens</span>
+      </div>
+      <div class="model-info-row">
+        <span class="model-info-label">Speed:</span>
+        <span class="model-info-value">~500 tokens/sec</span>
+      </div>
+    </div>
 
     <div class="sg-label">// behavior</div>
     <div class="setting-row">

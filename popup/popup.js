@@ -1,66 +1,17 @@
-// LearnFlow Popup v3 — Free Providers Only (Groq, Gemini, OpenRouter, HuggingFace)
+// LearnFlow Popup v4 — Groq Only (Simplified)
 
-/* ── Provider configs ─────────────────────────────────── */
-const PROVIDERS = {
-  gemini: {
-    name: "Google Gemini", emoji: "🔵",
-    keyUrl: "https://aistudio.google.com/app/apikey",
-    freeNote: "Free tier available — aistudio.google.com",
-    placeholder: "AIza…",
-    keyLabel: "Google AI Studio API Key",
-    // Enhanced model metadata with context windows and capabilities
-    models: [
-      { id: "gemini-2.0-flash",    label: "Gemini 2.0 Flash ✦ (recommended)", contextWindow: "1M tokens", speed: "fastest", multimodal: true },
-      { id: "gemini-1.5-flash",    label: "Gemini 1.5 Flash (fast)", contextWindow: "1M tokens", speed: "very fast", multimodal: true },
-      { id: "gemini-1.5-flash-8b", label: "Gemini 1.5 Flash-8B (lightest)", contextWindow: "1M tokens", speed: "fastest", multimodal: true },
-      { id: "gemini-1.5-pro",      label: "Gemini 1.5 Pro (powerful)", contextWindow: "2M tokens", speed: "moderate", multimodal: true },
-    ],
-  },
-  groq: {
-    name: "Groq", emoji: "⚡",
-    keyUrl: "https://console.groq.com/keys",
-    freeNote: "Free — console.groq.com",
-    placeholder: "gsk_…",
-    keyLabel: "Groq API Key",
-    models: [
-      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (recommended)" },
-      { id: "llama-3.1-8b-instant",    label: "Llama 3.1 8B (fastest)" },
-      { id: "mixtral-8x7b-32768",      label: "Mixtral 8x7B" },
-      { id: "gemma2-9b-it",            label: "Gemma 2 9B" },
-    ],
-  },
-  openrouter: {
-    name: "OpenRouter", emoji: "🔀",
-    keyUrl: "https://openrouter.ai/keys",
-    freeNote: "Free models — openrouter.ai",
-    placeholder: "sk-or-…",
-    keyLabel: "OpenRouter API Key",
-    models: [
-      { id: "meta-llama/llama-3.3-70b-instruct:free",  label: "Llama 3.3 70B (free)" },
-      { id: "deepseek/deepseek-r1:free",               label: "DeepSeek R1 🧠 (free)" },
-      { id: "deepseek/deepseek-chat-v3-0324:free",     label: "DeepSeek V3 (free)" },
-      { id: "mistralai/mistral-7b-instruct:free",      label: "Mistral 7B (free)" },
-      { id: "google/gemma-3-27b-it:free",              label: "Gemma 3 27B (free)" },
-      { id: "qwen/qwen3-30b-a3b:free",                 label: "Qwen3 30B (free)" },
-      { id: "microsoft/phi-4-reasoning:free",          label: "Phi-4 Reasoning (free)" },
-    ],
-  },
-  huggingface: {
-    name: "HuggingFace", emoji: "🤗",
-    keyUrl: "https://huggingface.co/settings/tokens",
-    freeNote: "Free Inference API — huggingface.co",
-    placeholder: "hf_…",
-    keyLabel: "HuggingFace Token",
-    models: [
-      { id: "meta-llama/Llama-3.2-11B-Vision-Instruct", label: "Llama 3.2 11B" },
-      { id: "mistralai/Mistral-7B-Instruct-v0.3",       label: "Mistral 7B Instruct" },
-      { id: "Qwen/Qwen2.5-72B-Instruct",                label: "Qwen 2.5 72B" },
-      { id: "microsoft/Phi-3.5-mini-instruct",          label: "Phi-3.5 Mini" },
-    ],
-  },
+/* ── Groq Provider Config ─────────────────────────────── */
+const PROVIDER = {
+  id: "groq",
+  name: "Groq",
+  emoji: "⚡",
+  keyUrl: "https://console.groq.com/keys",
+  placeholder: "gsk_…",
+  keyLabel: "Groq API Key",
+  // Best model automatically selected
+  model: "llama-3.3-70b-versatile",
+  modelLabel: "Llama 3.3 70B (fastest & smartest)",
 };
-
-const VALID_PROVIDERS = Object.keys(PROVIDERS);
 
 const QUICK_ACTIONS = {
   summarize: "Summarize this page comprehensively — main thesis, key points, evidence, and conclusions.",
@@ -69,13 +20,14 @@ const QUICK_ACTIONS = {
   critique:  "Critically analyze this content: main arguments, evidence quality, logical consistency, potential bias, credibility, and what's missing.",
   data:      "What are the most important facts, statistics, numbers, and data points mentioned on this page?",
   translate: "Translate the main content to English. If already in English, translate to French.",
+  solve:     "Solve this problem step-by-step. Show your reasoning clearly, explain each step, and provide the final answer with verification.",
 };
 
 const FORMAT_ICONS = { txt:"📄",md:"📝",html:"🌐",csv:"📊",json:"📋",js:"⚙️",py:"🐍",xml:"🏷",yaml:"📐",sql:"🗄",css:"🎨",zip:"🗜" };
 const MIME = { txt:"text/plain",md:"text/markdown",html:"text/html",csv:"text/csv",json:"application/json",js:"text/javascript",py:"text/x-python",xml:"application/xml",yaml:"text/yaml",sql:"text/plain",css:"text/css",zip:"application/zip" };
 
 /* ── State ────────────────────────────────────────────── */
-let settings = { activeProvider:"", activeModel:"", keys:{}, includeContext:true, selectionSidebar:true, autoSummarize:false, deepThink:false };
+let settings = { apiKey:"", includeContext:true, selectionSidebar:true, autoSummarize:false, deepThink:false };
 let history = [], currentResponse = "", currentTheme = "dark", selectedFormat = "txt", generatedFiles = [];
 
 /* ── Init ─────────────────────────────────────────────── */
@@ -85,8 +37,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderHistory();
   renderGenFiles();
   updateStatus();
-  updateProviderBadge();
-  restoreProviderUI();
   setupListeners();
   updateDeepThinkUI();
 });
@@ -98,20 +48,6 @@ async function load() {
   if (data.history)  history  = data.history;
   if (data.theme)    currentTheme = data.theme;
   if (data.genFiles) generatedFiles = data.genFiles;
-
-  if (settings.activeProvider && !PROVIDERS[settings.activeProvider]) {
-    settings.activeProvider = "";
-    settings.activeModel = "";
-  }
-  if (settings.activeProvider && settings.activeModel) {
-    const validIds = PROVIDERS[settings.activeProvider].models.map(m => m.id);
-    if (!validIds.includes(settings.activeModel))
-      settings.activeModel = PROVIDERS[settings.activeProvider].models[0].id;
-  }
-  if (settings.keys) {
-    for (const k of Object.keys(settings.keys))
-      if (!VALID_PROVIDERS.includes(k)) delete settings.keys[k];
-  }
 
   setToggle("toggleContext",   settings.includeContext);
   setToggle("toggleSelection", settings.selectionSidebar);
@@ -215,281 +151,102 @@ function setupListeners() {
     });
   });
 
-  document.querySelectorAll(".provider-card").forEach(card => {
-    card.addEventListener("click", () => selectProvider(card.dataset.provider));
-  });
-
-  document.getElementById("sharedKeySaveBtn").addEventListener("click", saveKey);
-  document.getElementById("sharedKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") saveKey(); });
-
-  document.getElementById("modelSelect").addEventListener("change", e => {
-    settings.activeModel = e.target.value;
-    save();
-    updateProviderBadge();
-  });
-
-  document.querySelectorAll(".format-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      document.querySelectorAll(".format-chip").forEach(c => c.classList.remove("selected"));
-      chip.classList.add("selected");
-      selectedFormat = chip.dataset.fmt;
-    });
-  });
-
-  document.getElementById("generateBtn").addEventListener("click", handleGenerate);
-  document.getElementById("filePrompt").addEventListener("keydown", e => { if (e.key === "Enter") handleGenerate(); });
+  // API Key save
+  document.getElementById("apiKeySaveBtn").addEventListener("click", saveApiKey);
+  document.getElementById("apiKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") saveApiKey(); });
 }
 
-/* ── Provider UI ──────────────────────────────────────── */
-function selectProvider(p) {
-  if (!PROVIDERS[p]) return;
-  const already = settings.activeProvider === p;
-  settings.activeProvider = already ? "" : p;
-  settings.activeModel    = already ? "" : PROVIDERS[p].models[0].id;
-  restoreProviderUI();
-  updateStatus();
-  updateProviderBadge();
-  save();
-}
-
-function saveKey() {
-  const p = settings.activeProvider;
-  if (!p || !PROVIDERS[p]) return;
-  const key = document.getElementById("sharedKeyInput").value.trim();
+/* ── API Key Management ───────────────────────────────── */
+function saveApiKey() {
+  const key = document.getElementById("apiKeyInput").value.trim();
   if (!key) return;
-  settings.keys[p] = key;
+  settings.apiKey = key;
   save();
-  const status = document.getElementById("sharedKeyStatus");
-  status.textContent = "✓ Key saved · " + PROVIDERS[p].freeNote;
+  const status = document.getElementById("apiKeyStatus");
+  status.textContent = "✓ Key saved and ready";
   status.className = "key-status ok";
-  document.querySelector(".provider-card[data-provider='" + p + "']")?.classList.add("has-key");
   updateStatus();
-  updateProviderBadge();
-}
-
-function restoreProviderUI() {
-  const p = settings.activeProvider;
-  document.querySelectorAll(".provider-card").forEach(card => {
-    const cp = card.dataset.provider;
-    card.classList.toggle("selected", cp === p);
-    card.classList.toggle("has-key", !!(settings.keys && settings.keys[cp]));
-  });
-  const keyArea = document.getElementById("providerKeyArea");
-  if (p && PROVIDERS[p]) {
-    const prov = PROVIDERS[p];
-    keyArea.classList.add("visible");
-    document.getElementById("keyAreaEmoji").textContent = prov.emoji;
-    document.getElementById("keyAreaTitle").textContent = prov.keyLabel;
-    document.getElementById("keyAreaSub").innerHTML =
-      '<a href="' + prov.keyUrl + '" target="_blank" style="color:var(--accent);text-decoration:none;">🔑 Get key →</a>';
-    const inp = document.getElementById("sharedKeyInput");
-    inp.placeholder = prov.placeholder;
-    inp.value = (settings.keys && settings.keys[p]) || "";
-    const status = document.getElementById("sharedKeyStatus");
-    if (settings.keys && settings.keys[p]) {
-      status.textContent = "✓ Key saved · " + prov.freeNote;
-      status.className = "key-status ok";
-    } else {
-      status.textContent = prov.freeNote;
-      status.className = "key-status";
-    }
-
-    // Show deep think badge on provider card if it supports it
-    const deepBadge = document.getElementById("deepThinkProviderNote");
-    if (deepBadge) {
-      deepBadge.style.display = prov.supportsDeepThink ? "block" : "none";
-      if (prov.supportsDeepThink) {
-        deepBadge.textContent = `🧠 Deep Think uses ${prov.deepThinkModel}`;
-      }
-    }
-  } else {
-    keyArea.classList.remove("visible");
-  }
-  updateModelDropdown();
-}
-
-function updateModelDropdown() {
-  const sel = document.getElementById("modelSelect");
-  if (!sel) return;
-  const p = settings.activeProvider;
-  if (!p || !PROVIDERS[p]) {
-    sel.innerHTML = '<option value="">— select provider first —</option>';
-    return;
-  }
-  const models = PROVIDERS[p].models;
-  sel.innerHTML = models.map(m =>
-    '<option value="' + m.id + '"' + (settings.activeModel === m.id ? " selected" : "") + ">" + m.label + "</option>"
-  ).join("");
-  if (!settings.activeModel) { settings.activeModel = models[0].id; sel.value = models[0].id; }
-}
-
-function updateProviderBadge() {
-  const emoji = document.getElementById("badgeEmoji");
-  const text  = document.getElementById("badgeText");
-  if (!emoji || !text) return;
-  const p    = settings.activeProvider;
-  const prov = PROVIDERS[p] || null;
-  if (!prov) { emoji.textContent = "⚙"; text.textContent = "Set up provider →"; return; }
-  const hasKey = !!(settings.keys && settings.keys[p]);
-  emoji.textContent = prov.emoji;
-  text.textContent  = hasKey
-    ? prov.name + " · " + (settings.activeModel || "").split("/").pop()
-    : prov.name + " — add API key →";
 }
 
 function updateStatus() {
   const dot = document.getElementById("statusDot");
   const txt = document.getElementById("statusText");
-  if (!dot || !txt) return;
-  const p    = settings.activeProvider;
-  const prov = PROVIDERS[p] || null;
-  const hasKey = prov && !!(settings.keys && settings.keys[p]);
-  if (hasKey)    { dot.classList.add("on"); txt.textContent = prov.name + (settings.deepThink ? " · 🧠 Deep Think" : " · ready"); }
-  else if (prov) { dot.classList.remove("on"); txt.textContent = prov.name + " — no key"; }
-  else           { dot.classList.remove("on"); txt.textContent = "No provider set"; }
+  const badgeEmoji = document.getElementById("badgeEmoji");
+  const badgeText = document.getElementById("badgeText");
+  const hasKey = !!settings.apiKey;
+  
+  if (badgeEmoji) badgeEmoji.textContent = PROVIDER.emoji;
+  if (badgeText) {
+    badgeText.textContent = hasKey
+      ? PROVIDER.name + " · " + PROVIDER.modelLabel
+      : PROVIDER.name + " — add API key →";
+  }
+  
+  if (dot && txt) {
+    if (hasKey) {
+      dot.classList.add("on");
+      txt.textContent = PROVIDER.name + " · ready" + (settings.deepThink ? " · 🧠 Deep Think" : "");
+    } else {
+      dot.classList.remove("on");
+      txt.textContent = PROVIDER.name + " — no key";
+    }
+  }
+  
+  // Pre-fill key input if exists
+  const keyInput = document.getElementById("apiKeyInput");
+  if (keyInput && settings.apiKey) keyInput.value = settings.apiKey;
 }
 
-/* ── AI Call ──────────────────────────────────────────── */
-async function callProvider(messages, systemPrompt, isDeepThink = false) {
-  const p   = settings.activeProvider;
-  const key = settings.keys && settings.keys[p];
-  if (!p || !PROVIDERS[p]) throw new Error("No provider selected — go to Settings.");
-  if (!key) throw new Error("No API key for " + PROVIDERS[p].name + " — go to Settings.");
-  const model = settings.activeModel || PROVIDERS[p].models[0].id;
-
-  if (p === "gemini") {
-    const actualModel = model || "gemini-2.0-flash";
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + actualModel + ":generateContent?key=" + key;
+/* ── Groq API Call ────────────────────────────────────── */
+async function callGroq(messages, systemPrompt, isDeepThink = false) {
+  const key = settings.apiKey;
+  if (!key) throw new Error("No Groq API key — go to Settings and add your key.");
+  
+  const msgs = systemPrompt ? [{ role:"system", content:systemPrompt }, ...messages] : messages;
+  const model = PROVIDER.model;
+  
+  const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer " + key},
+    body:JSON.stringify({
+      model,
+      max_tokens: isDeepThink ? 4096 : 2048,
+      temperature: isDeepThink ? 0.7 : 0.5,
+      messages: msgs
+    })
+  });
+  
+  if (!resp.ok) {
+    const e = await resp.json().catch(()=>({}));
+    const errorMsg = e.error?.message || "HTTP " + resp.status;
     
-    // Enhanced Gemini API call with better parameters
-    const contents = messages.map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
-    const body = {
-      contents,
-      systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-      generationConfig: {
-        temperature: isDeepThink ? 0.7 : 0.5,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: isDeepThink ? 8192 : 4096,
-      },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-      ],
-    };
-    
-    const resp = await fetch(url, { 
-      method:"POST", 
-      headers:{"Content-Type":"application/json"}, 
-      body:JSON.stringify(body) 
-    });
-    
-    // Enhanced error handling for Gemini-specific errors
-    if (!resp.ok) {
-      const errorText = await resp.text().catch(() => "");
-      let errorData = {};
-      try { errorData = JSON.parse(errorText); } catch {}
-      
-      const errorMsg = errorData.error?.message || errorText || "Gemini HTTP " + resp.status;
-      
-      // Gemini-specific error messages
-      if (resp.status === 429) {
-        throw new Error("Rate limit exceeded — Gemini API quota reached. Wait a moment or upgrade your API tier.");
-      }
-      if (resp.status === 403) {
-        throw new Error("API key invalid or expired — get a fresh key from aistudio.google.com");
-      }
-      if (resp.status === 400) {
-        throw new Error("Invalid request: " + (errorData.error?.details?.[0]?.reason || errorMsg));
-      }
-      throw new Error(errorMsg);
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error("Invalid Groq API key — please check your key in Settings.");
     }
-    
-    const d = await resp.json();
-    
-    // Handle Gemini response with better safety checks
-    if (!d.candidates || d.candidates.length === 0) {
-      if (d.promptFeedback?.blockReason) {
-        throw new Error("Content blocked by safety filters: " + d.promptFeedback.blockReason);
-      }
-      throw new Error("No response from Gemini");
+    if (resp.status === 429) {
+      throw new Error("Rate limit — Groq API is busy. Wait a moment and try again.");
     }
-    
-    const candidate = d.candidates[0];
-    if (candidate.finishReason === "SAFETY") {
-      throw new Error("Response blocked by safety filters");
+    if (resp.status === 402) {
+      throw new Error("Insufficient credits — your Groq account has run out of credits.");
     }
-    
-    return candidate.content?.parts?.[0]?.text || "";
+    throw new Error(errorMsg);
   }
-
-  if (p === "groq") {
-    const msgs = systemPrompt ? [{ role:"system", content:systemPrompt }, ...messages] : messages;
-    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method:"POST", headers:{"Content-Type":"application/json","Authorization":"Bearer " + key},
-      body:JSON.stringify({ model, max_tokens:2048, messages:msgs })
-    });
-    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message || "HTTP " + resp.status); }
-    return (await resp.json()).choices?.[0]?.message?.content || "";
-  }
-
-  if (p === "openrouter") {
-    const msgs = systemPrompt ? [{ role:"system", content:systemPrompt }, ...messages] : messages;
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer " + key,"HTTP-Referer":"https://learnflow.ext","X-Title":"LearnFlow"},
-      body:JSON.stringify({ model, max_tokens:2048, messages:msgs })
-    });
-    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message || "HTTP " + resp.status); }
-    return (await resp.json()).choices?.[0]?.message?.content || "";
-  }
-
-  if (p === "huggingface") {
-    const msgs = systemPrompt ? [{ role:"system", content:systemPrompt }, ...messages] : messages;
-    const resp = await fetch("https://api-inference.huggingface.co/models/" + model + "/v1/chat/completions", {
-      method:"POST", headers:{"Content-Type":"application/json","Authorization":"Bearer " + key},
-      body:JSON.stringify({ model, max_tokens:2048, messages:msgs })
-    });
-    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error || "HTTP " + resp.status); }
-    return (await resp.json()).choices?.[0]?.message?.content || "";
-  }
-
-  throw new Error("Unknown provider: " + p);
+  
+  return (await resp.json()).choices?.[0]?.message?.content || "";
 }
 
 /* ── Error Helper ─────────────────────────────────────── */
 function friendlyError(err) {
   const msg = (err.message || "").toLowerCase();
   
-  // Gemini-specific errors
-  if (msg.includes("gemini") || msg.includes("generativelanguage")) {
-    if (msg.includes("rate limit") || msg.includes("quota") || msg.includes("429"))
-      return "❌ **Gemini Rate Limit** — you've hit the API quota.\n\n💡 Free tier: 15 requests/minute. Wait ~1 minute or upgrade at aistudio.google.com\n\n🔄 Or switch to Groq/OpenRouter for unlimited free requests.";
-    if (msg.includes("api key") || msg.includes("unauthorized") || msg.includes("403"))
-      return "❌ **Invalid Gemini API Key** — the key was rejected.\n\n💡 Get a fresh key: https://aistudio.google.com/app/apikey\n\n📝 Keys start with `AIza…`";
-    if (msg.includes("blocked") || msg.includes("safety"))
-      return "⚠️ **Content Filtered** — Gemini blocked this request due to safety policies.\n\n💡 Try rephrasing your question or use a different provider.";
-    if (msg.includes("invalid request") || msg.includes("400"))
-      return "❌ **Invalid Request** — Gemini rejected the request format.\n\n💡 Try a simpler question or switch models in Settings.";
-  }
-  
-  // Generic provider errors
-  if (msg.includes("insufficient balance") || msg.includes("insufficient_balance") || msg.includes("out of credits"))
-    return "❌ Insufficient balance — your API key has run out of credits.\n\n💡 Top up at the provider's billing page, or switch to a free provider like Groq or OpenRouter in Settings.";
-  if (msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("unauthorized") || msg.includes("authentication"))
-    return "❌ Invalid API key — the key was rejected.\n\n💡 Go to Settings and re-enter your API key.";
-  if (msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("429"))
-    return "❌ Rate limit — too many requests sent.\n\n💡 Wait a moment and try again, or switch providers.";
-  if (msg.includes("quota") || msg.includes("limit exceeded"))
-    return "❌ Quota exceeded — you've hit your plan's usage cap.\n\n💡 Check your billing dashboard or switch to Groq / OpenRouter (free).";
-  if (msg.includes("model not found") || msg.includes("no such model"))
-    return "❌ Model not found — this model may be unavailable.\n\n💡 Go to Settings and select a different model.";
-  if (msg.includes("context length") || (msg.includes("token") && msg.includes("exceed")))
-    return "❌ Page too large — content exceeds the model's limit.\n\n💡 Ask a more specific question or pick a larger-context model.";
-  if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("load failed"))
-    return "❌ Network error — can't reach the API.\n\n💡 Check your internet connection and try again.";
+  if (msg.includes("invalid api key") || msg.includes("unauthorized") || msg.includes("401") || msg.includes("403"))
+    return "❌ **Invalid Groq API Key** — the key was rejected.\n\n💡 Get your key: https://console.groq.com/keys\n\n📝 Keys start with `gsk_…`\n\nGo to Settings and re-enter your key.";
+  if (msg.includes("rate limit") || msg.includes("429"))
+    return "❌ **Rate Limit** — Groq API is busy.\n\n💡 Wait ~30 seconds and try again.";
+  if (msg.includes("insufficient") || msg.includes("credits") || msg.includes("402"))
+    return "❌ **Out of Credits** — your Groq account has no credits left.\n\n💡 Top up at https://console.groq.com or check your billing.";
+  if (msg.includes("network") || msg.includes("failed to fetch"))
+    return "❌ **Network Error** — can't reach Groq API.\n\n💡 Check your internet connection.";
   return "❌ Error: " + err.message;
 }
 
@@ -507,7 +264,6 @@ async function handleAsk() {
       const res = await chrome.scripting.executeScript({
         target:{ tabId:tab.id },
         func:() => {
-          // Rich extraction matching content.js
           const meta = [`Title: ${document.title}`, `URL: ${location.href}`, `Domain: ${location.hostname}`];
           document.querySelectorAll('meta[name="description"], meta[name="keywords"], meta[name="author"]').forEach(m => {
             if (m.content) meta.push(`${m.name}: ${m.content}`);
@@ -523,9 +279,9 @@ async function handleAsk() {
       if (res?.[0]?.result) pageContext = res[0].result;
     } catch {}
   }
-  const system = "You are LearnFlow v3, a precise AI research assistant in a Chrome extension. Be thorough, analytical, and well-structured. Use markdown." + (pageContext ? "\n\nCurrent page:\n" + pageContext : "");
+  const system = "You are LearnFlow v4, a precise AI research assistant in a Chrome extension. Be thorough, analytical, and well-structured. Use markdown." + (pageContext ? "\n\nCurrent page:\n" + pageContext : "");
   try {
-    const answer = await callProvider([{ role:"user", content:q }], system, isDeep);
+    const answer = await callGroq([{ role:"user", content:q }], system, isDeep);
     currentResponse = answer;
     showResponse(answer);
     addToHistory(q, answer);
@@ -569,7 +325,7 @@ async function handleGenerate() {
     zip:"Generate 3 related files. Format each:\n===FILE: filename.ext===\n[content]\n===END===\nNo other text."
   };
   try {
-    const raw = await callProvider(
+    const raw = await callGroq(
       [{ role:"user", content:"Generate the following: " + prompt + "\n\nFormat: " + fmt.toUpperCase() }],
       "You are a precise file generator. " + systemInstructions[fmt]
     );

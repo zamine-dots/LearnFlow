@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LearnFlow – AI Research Assistant",
   "version": "3.0.0",
-  "description": "AI research assistant with deep thinking, multi-provider support (DeepSeek, ChatGPT, Gemini, Groq & more). Analyze pages, generate & download files.",
+  "description": "AI research assistant powered by Groq (Llama 3.3 70B). Analyze pages, generate & download files.",
   "permissions": [
     "activeTab",
     "storage",
@@ -12,10 +12,7 @@
     "downloads"
   ],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*",
     "https://api.groq.com/*",
-    "https://openrouter.ai/*",
-    "https://api-inference.huggingface.co/*",
     "<all_urls>"
   ],
   "action": {
