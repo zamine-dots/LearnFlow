@@ -186,8 +186,6 @@
 
 <div class="tabs">
   <button class="tab active" data-tab="ask">Ask</button>
-  <button class="tab" data-tab="files">Files</button>
-  <button class="tab" data-tab="history">History</button>
   <button class="tab" data-tab="settings">Settings</button>
 </div>
 
@@ -232,47 +230,6 @@
       <div class="chip" data-action="sidebar">⚡ Full Sidebar</div>
     </div>
     <button class="sidebar-btn" id="openSidebarBtn">⚡ Open Full Research Sidebar</button>
-  </div>
-</div>
-
-<!-- FILES -->
-<div class="panel" id="panel-files">
-  <div style="padding:13px;">
-    <div class="file-gen-box">
-      <label>// describe what to generate</label>
-      <div class="file-prompt-row">
-        <input type="text" id="filePrompt" placeholder="e.g. CSV of top 10 programming languages, README for my project…"/>
-      </div>
-      <label>// output format</label>
-      <div class="format-grid">
-        <div class="format-chip selected" data-fmt="txt">TXT</div>
-        <div class="format-chip" data-fmt="md">MD</div>
-        <div class="format-chip" data-fmt="html">HTML</div>
-        <div class="format-chip" data-fmt="csv">CSV</div>
-        <div class="format-chip" data-fmt="json">JSON</div>
-        <div class="format-chip" data-fmt="js">JS</div>
-        <div class="format-chip" data-fmt="py">PY</div>
-        <div class="format-chip" data-fmt="xml">XML</div>
-        <div class="format-chip" data-fmt="yaml">YAML</div>
-        <div class="format-chip" data-fmt="sql">SQL</div>
-        <div class="format-chip" data-fmt="css">CSS</div>
-        <div class="format-chip" data-fmt="zip">ZIP</div>
-      </div>
-      <button class="gen-btn" id="generateBtn"><span>⚡</span> Generate & Download</button>
-    </div>
-    <div class="gen-files-label">// generated files</div>
-    <div id="genFilesList">
-      <div class="empty-state" style="padding:16px 0;"><div class="empty-icon">📂</div>Generated files appear here</div>
-    </div>
-  </div>
-</div>
-
-<!-- HISTORY -->
-<div class="panel" id="panel-history">
-  <div style="padding:10px 14px 14px;">
-    <div id="historyList">
-      <div class="empty-state"><div class="empty-icon">📭</div>No history yet</div>
-    </div>
   </div>
 </div>
 
@@ -322,6 +279,10 @@
     <div class="setting-row">
       <div><div class="setting-row-lbl">Auto-summarize</div><div class="setting-row-desc">Summarize articles on load</div></div>
       <div class="toggle" id="toggleAutoSumm"></div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-row-lbl">Deep Think mode</div><div class="setting-row-desc">More detailed, slower responses</div></div>
+      <div class="toggle deep" id="toggleDeepThink"></div>
     </div>
 
   </div>

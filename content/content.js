@@ -608,6 +608,7 @@ ${ctx}
     t.innerHTML = `
       <button class="bh-sel-btn" data-action="explain">Explain</button>
       <button class="bh-sel-btn" data-action="summarize">Summarize</button>
+      <button class="bh-sel-btn" data-action="solve">✏️ Solve</button>
       <button class="bh-sel-btn" data-action="define">Define</button>
       <button class="bh-sel-btn" data-action="translate">Translate</button>
       <button class="bh-sel-btn" data-action="deep">🧠 Deep</button>
@@ -632,6 +633,7 @@ ${ctx}
           const prompts = {
             explain: `Explain this in depth with context, examples, and significance: "${text}"`,
             summarize: `Summarize this in 2-3 sentences, capturing the key idea: "${text}"`,
+            solve: `Solve this problem methodically. Restate what's being asked, identify given information, show step-by-step reasoning, provide a clear final answer, and verify the result: "${text}"`,
             define: `Define all key terms, concepts, and jargon in: "${text}"`,
             translate: `Translate to English (or French if already English): "${text}"`,
             deep: `Perform a comprehensive deep analysis of this text — meaning, context, implications, related concepts, what it reveals: "${text}"`,

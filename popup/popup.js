@@ -20,22 +20,17 @@ const QUICK_ACTIONS = {
   critique:  "Provide a rigorous critical analysis of this content. Address:\n\n**Arguments** (what claims are being made)\n**Evidence Quality** (strong/weak, sources, recency, sample sizes)\n**Logical Consistency** (any fallacies or gaps in reasoning)\n**Potential Bias** (author perspective, funding, selection bias)\n**Credibility** (expertise, track record, peer review)\n**What's Missing** (counterarguments, alternative explanations, key context)\n\nBe fair but thorough. Point out both strengths and weaknesses.",
   data:      "Extract all significant facts, statistics, numbers, and data points from this content. Present as:\n\n• **Category/Topic** (group related data)\n  - Specific numbers with units\n  - Percentages, ratios, comparisons\n  - Dates, timeframes, trends\n  - Sample sizes, margins of error when mentioned\n\nInclude the actual numbers, not just descriptions. Quote precisely when possible.",
   translate: "Translate the main content to clear, natural English. If the content is already in English, translate to French instead.\n\n• Preserve the original meaning and tone\n• Adapt idioms and cultural references appropriately\n• Maintain technical accuracy\n• Keep the structure similar to the original\n\nDo not add commentary or explanations—just translate.",
-  solve:     "Solve this problem methodically with clear, verifiable reasoning:\n\n**1. Understanding** (restate the problem, identify what's being asked)\n**2. Given Information** (list known facts, constraints, assumptions)\n**3. Approach** (explain your solution strategy and why)\n**4. Step-by-Step Solution** (show all work, explain each step)\n**5. Final Answer** (clearly state the result)\n**6. Verification** (check your answer, alternative method, sanity check)\n\nShow your reasoning at each step. Explain WHY, not just WHAT. If there are multiple approaches, mention them.",
+  solve:     "Solve this problem methodically with clear, verifiable reasoning:\n\n**1. Understanding** (restate the problem, identify what's being asked, list constraints)\n**2. Given Information** (extract all known facts, data, assumptions from the content)\n**3. Approach** (explain your solution strategy, why this method works, any formulas or principles)\n**4. Step-by-Step Solution** (show all work with clear explanations for each step)\n**5. Final Answer** (clearly state the result, box or highlight it)\n**6. Verification** (check your answer makes sense, alternative method if applicable, sanity check)\n\nShow your reasoning at each step. Explain WHY, not just WHAT. If there are multiple valid approaches, mention them briefly.",
 };
-
-const FORMAT_ICONS = { txt:"📄",md:"📝",html:"🌐",csv:"📊",json:"📋",js:"⚙️",py:"🐍",xml:"🏷",yaml:"📐",sql:"🗄",css:"🎨",zip:"🗜" };
-const MIME = { txt:"text/plain",md:"text/markdown",html:"text/html",csv:"text/csv",json:"application/json",js:"text/javascript",py:"text/x-python",xml:"application/xml",yaml:"text/yaml",sql:"text/plain",css:"text/css",zip:"application/zip" };
 
 /* ── State ────────────────────────────────────────────── */
 let settings = { apiKey:"", includeContext:true, selectionSidebar:true, autoSummarize:false, deepThink:false };
-let history = [], currentResponse = "", currentTheme = "dark", selectedFormat = "txt", generatedFiles = [];
+let currentResponse = "", currentTheme = "dark";
 
 /* ── Init ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", async () => {
   await load();
   applyTheme(currentTheme);
-  renderHistory();
-  renderGenFiles();
   updateStatus();
   setupListeners();
   updateDeepThinkUI();
@@ -43,11 +38,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 /* ── Load / Save ──────────────────────────────────────── */
 async function load() {
-  const data = await chrome.storage.local.get(["settings","history","theme","genFiles"]);
+  const data = await chrome.storage.local.get(["settings","theme"]);
   if (data.settings) settings = { ...settings, ...data.settings };
-  if (data.history)  history  = data.history;
   if (data.theme)    currentTheme = data.theme;
-  if (data.genFiles) generatedFiles = data.genFiles;
 
   setToggle("toggleContext",   settings.includeContext);
   setToggle("toggleSelection", settings.selectionSidebar);
@@ -285,7 +278,6 @@ async function handleAsk() {
     const answer = await callGroq([{ role:"user", content:q }], system, isDeep);
     currentResponse = answer;
     showResponse(answer);
-    addToHistory(q, answer);
   } catch (err) {
     showResponse(friendlyError(err));
   }
@@ -302,145 +294,11 @@ function showLoading(on, isDeep = false) {
 }
 function showResponse(text) { showLoading(false); document.getElementById("responseText").textContent = text; }
 
-/* ── File Generation ──────────────────────────────────── */
-async function handleGenerate() {
-  const prompt = document.getElementById("filePrompt").value.trim();
-  if (!prompt) return;
-  const btn = document.getElementById("generateBtn");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="dots"><span></span><span></span><span></span></span> Generating…';
-  const fmt   = selectedFormat;
-  const isZip = fmt === "zip";
-  const systemInstructions = {
-    txt:"Output only plain text. No markdown.",
-    md:"Output only valid Markdown. No preamble.",
-    html:"Output only a complete valid HTML file with inline CSS. No explanations.",
-    csv:"Output only raw CSV with a header row. No explanations.",
-    json:"Output only valid pretty-printed JSON. No explanations.",
-    js:"Output only valid JavaScript. Comments inside only.",
-    py:"Output only valid Python. Docstrings inside only.",
-    xml:"Output only valid XML. No explanations.",
-    yaml:"Output only valid YAML. No explanations.",
-    sql:"Output only valid SQL. Comments inside only.",
-    css:"Output only valid CSS. Comments inside only.",
-    zip:"Generate 3 related files. Format each:\n===FILE: filename.ext===\n[content]\n===END===\nNo other text."
-  };
-  try {
-    const raw = await callGroq(
-      [{ role:"user", content:"Generate the following: " + prompt + "\n\nFormat: " + fmt.toUpperCase() }],
-      "You are a precise file generator. " + systemInstructions[fmt]
-    );
-    if (isZip) {
-      await generateZip(raw, prompt);
-    } else {
-      const filename = slugify(prompt) + "." + fmt;
-      const file = { name:filename, content:raw, fmt, size:raw.length, ts:Date.now() };
-      generatedFiles.unshift(file);
-      await chrome.storage.local.set({ genFiles:generatedFiles.slice(0,20) });
-      renderGenFiles();
-      downloadText(raw, filename, MIME[fmt] || "text/plain");
-    }
-  } catch (err) {
-    alert("Generation failed: " + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = "<span>⚡</span> Generate & Download";
-  }
-}
-
-async function generateZip(raw, prompt) {
-  const fileRegex = /===FILE:\s*(.+?)===\n([\s\S]*?)===END===/g;
-  const files = [];
-  let match;
-  while ((match = fileRegex.exec(raw)) !== null) files.push({ name:match[1].trim(), content:match[2].trim() });
-  if (!files.length) files.push({ name:"output.txt", content:raw });
-  const zipBytes = buildZip(files);
-  const zipName  = slugify(prompt) + ".zip";
-  const url = URL.createObjectURL(new Blob([zipBytes], { type:"application/zip" }));
-  const a = document.createElement("a"); a.href = url; a.download = zipName; a.click();
-  URL.revokeObjectURL(url);
-  generatedFiles.unshift({ name:zipName, content:files.length+" files", fmt:"zip", size:zipBytes.length, ts:Date.now() });
-  await chrome.storage.local.set({ genFiles:generatedFiles.slice(0,20) });
-  renderGenFiles();
-}
-
-function buildZip(files) {
-  const enc = new TextEncoder(), lh = [], cd = [];
-  let off = 0;
-  for (const f of files) {
-    const nb = enc.encode(f.name), db = enc.encode(f.content), crc = crc32(db);
-    const lo = new Uint8Array(30+nb.length+db.length), dv = new DataView(lo.buffer);
-    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true);
-    dv.setUint32(14,crc,true); dv.setUint32(18,db.length,true); dv.setUint32(22,db.length,true);
-    dv.setUint16(26,nb.length,true); lo.set(nb,30); lo.set(db,30+nb.length);
-    const ce = new Uint8Array(46+nb.length), cv = new DataView(ce.buffer);
-    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
-    cv.setUint32(16,crc,true); cv.setUint32(20,db.length,true); cv.setUint32(24,db.length,true);
-    cv.setUint16(28,nb.length,true); cv.setUint32(42,off,true); ce.set(nb,46);
-    lh.push(lo); cd.push(ce); off += lo.length;
-  }
-  const cds = cd.reduce((s,c)=>s+c.length,0), eo = new Uint8Array(22), ev = new DataView(eo.buffer);
-  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
-  ev.setUint32(12,cds,true); ev.setUint32(16,off,true);
-  const parts = [...lh,...cd,eo], out = new Uint8Array(parts.reduce((s,p)=>s+p.length,0));
-  let pos = 0; for (const p of parts) { out.set(p,pos); pos+=p.length; }
-  return out;
-}
-
-function crc32(data) {
-  const t = [];
-  for (let i=0;i<256;i++) { let c=i; for (let j=0;j<8;j++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[i]=c; }
-  let crc=0xFFFFFFFF;
-  for (let i=0;i<data.length;i++) crc=t[(crc^data[i])&0xFF]^(crc>>>8);
-  return (crc^0xFFFFFFFF)>>>0;
-}
-
-function downloadText(content,filename,mime) {
-  const url=URL.createObjectURL(new Blob([content],{type:mime}));
-  const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
-}
-
-function renderGenFiles() {
-  const list=document.getElementById("genFilesList"); if(!list)return;
-  if(!generatedFiles.length){ list.innerHTML='<div class="empty-state" style="padding:16px 0;"><div class="empty-icon">📂</div>Generated files appear here</div>'; return; }
-  list.innerHTML=generatedFiles.slice(0,15).map((f,i)=>
-    '<div class="gen-file-item"><div class="gen-file-icon">'+(FORMAT_ICONS[f.fmt]||"📄")+'</div><div class="gen-file-info"><div class="gen-file-name">'+esc(f.name)+'</div><div class="gen-file-size">'+formatSize(f.size)+' · '+new Date(f.ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+'</div></div><button class="dl-btn" data-idx="'+i+'">↓</button></div>'
-  ).join("");
-  list.querySelectorAll(".dl-btn").forEach(btn=>{
-    btn.addEventListener("click",()=>{ const f=generatedFiles[+btn.dataset.idx]; if(f&&f.content&&f.fmt!=="zip") downloadText(f.content,f.name,MIME[f.fmt]||"text/plain"); });
-  });
-}
-
 /* ── Sidebar ──────────────────────────────────────────── */
 async function openSidebar() {
   const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
   chrome.tabs.sendMessage(tab.id,{action:"toggleSidebar"});
   window.close();
-}
-
-/* ── History ──────────────────────────────────────────── */
-async function addToHistory(q,a) {
-  history.unshift({q,a,time:new Date().toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})});
-  if(history.length>50)history.pop();
-  await chrome.storage.local.set({history});
-  renderHistory();
-}
-
-function renderHistory() {
-  const list=document.getElementById("historyList"); if(!list)return;
-  if(!history.length){ list.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div>No history yet</div>'; return; }
-  list.innerHTML='<button class="history-clear" id="clearHistoryBtn">clear all</button>'
-    +history.slice(0,20).map((item,i)=>'<div class="history-item" data-index="'+i+'"><div class="history-q">'+esc(item.q)+'</div><div class="history-meta">'+item.time+'</div></div>').join("");
-  document.getElementById("clearHistoryBtn")?.addEventListener("click",async()=>{ history=[];await chrome.storage.local.set({history});renderHistory(); });
-  list.querySelectorAll(".history-item").forEach(el=>{
-    el.addEventListener("click",()=>{
-      const item=history[+el.dataset.index];
-      document.getElementById("questionInput").value=item.q;
-      currentResponse=item.a; showResponse(item.a);
-      document.getElementById("responseBox").classList.add("visible");
-      document.querySelector(".tab[data-tab='ask']").click();
-    });
-  });
 }
 
 /* ── Utils ────────────────────────────────────────────── */
