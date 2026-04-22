@@ -1,10 +1,10 @@
-// LearnFlow Content Script v3 — Rich Page Analysis + Deep Think Mode
+// LearnFlow Content Script v5 — Complete Fix with Screenshot, Course Extract, Vision Support
 (function () {
   if (window.__learnflowLoaded) return;
   window.__learnflowLoaded = true;
 
   /* ═══════════════════════════════════════════════
-     PAGE ANALYZER — much richer than before
+     PAGE ANALYZER — Enhanced for Course Pages
   ═══════════════════════════════════════════════ */
   const Extractor = {
     detectPageType() {
@@ -19,6 +19,13 @@
       if (document.querySelector("article, .post-content, .entry-content")) return "article";
       if (document.querySelector("form input, form select")) return "form";
       if (document.querySelector("table")) return "data";
+      
+      // NEW: Course platform detection
+      if (url.includes("coursera.org") || url.includes("udemy.com") || url.includes("edx.org") || 
+          url.includes("khanacademy.org") || url.includes("skillshare.com") || url.includes("linkedin.com/learning") ||
+          document.querySelector(".video-player, .lesson-content, .course-content, .module-content, .lesson-video")) {
+        return "course";
+      }
       return "page";
     },
 
@@ -36,43 +43,34 @@
           lines.push(`${key}: ${val}`);
         }
       });
-      // canonical link
       const canonical = document.querySelector('link[rel="canonical"]');
       if (canonical) lines.push(`canonical: ${canonical.href}`);
-      // lang
       if (document.documentElement.lang) lines.push(`lang: ${document.documentElement.lang}`);
       return lines.join("\n");
     },
 
-    // NEW: Rich page statistics
     analyzePageStats() {
       const bodyText = document.body?.innerText || "";
       const words = bodyText.trim().split(/\s+/).filter(Boolean);
       const sentences = bodyText.split(/[.!?]+/).filter(s => s.trim().length > 10);
       const readingMinutes = Math.ceil(words.length / 200);
 
-      // Links
       const allLinks = [...document.querySelectorAll("a[href]")];
       const internalLinks = allLinks.filter(a => a.hostname === location.hostname);
       const externalLinks = allLinks.filter(a => a.hostname && a.hostname !== location.hostname);
 
-      // Images
       const images = [...document.querySelectorAll("img[src]")];
       const imagesWithAlt = images.filter(img => img.alt?.trim());
 
-      // Headings structure
       const headings = [...document.querySelectorAll("h1,h2,h3,h4")].map(h => ({
         level: h.tagName, text: h.innerText?.trim().slice(0, 80)
       })).filter(h => h.text).slice(0, 20);
 
-      // Videos / embeds
       const videos = document.querySelectorAll("video, iframe[src*='youtube'], iframe[src*='vimeo']").length;
 
-      // Page load timing (if available)
       const timing = performance?.timing;
       const loadTime = timing ? Math.round(timing.loadEventEnd - timing.navigationStart) : null;
 
-      // Detect if page is behind a paywall / login wall
       const paywallHints = document.querySelector(".paywall, .subscription-wall, [class*='paywall'], [id*='paywall']");
 
       const stats = [
@@ -94,6 +92,71 @@
       const linksSection = topExternal ? `\nKEY EXTERNAL LINKS:\n${topExternal}` : "";
 
       return stats + headingOutline + linksSection;
+    },
+
+    // NEW: Enhanced course content extraction
+    extractCourseContent() {
+      const url = location.href.toLowerCase();
+      const parts = [];
+      
+      // Detect course platform
+      let platform = "Unknown";
+      if (url.includes("coursera")) platform = "Coursera";
+      else if (url.includes("udemy")) platform = "Udemy";
+      else if (url.includes("edx")) platform = "edX";
+      else if (url.includes("khanacademy")) platform = "Khan Academy";
+      else if (url.includes("skillshare")) platform = "Skillshare";
+      else if (url.includes("linkedin.com/learning")) platform = "LinkedIn Learning";
+      
+      parts.push(`=== COURSE CONTENT (${platform}) ===`);
+      
+      // Extract video title/description
+      const videoTitle = document.querySelector('h1, .video-title, .lesson-title, .section-title')?.innerText?.trim();
+      if (videoTitle) parts.push(`\n**Video/Lesson Title:** ${videoTitle}`);
+      
+      // Extract instructor info
+      const instructor = document.querySelector('.instructor-name, .teacher-name, [class*="instructor"], [class*="teacher"]')?.innerText?.trim();
+      if (instructor) parts.push(`**Instructor:** ${instructor}`);
+      
+      // Extract video transcript/captions if available
+      const transcript = document.querySelector('.transcript, .captions, [class*="transcript"]')?.innerText?.trim();
+      if (transcript) parts.push(`\n**Transcript:**\n${transcript.slice(0, 3000)}`);
+      
+      // Extract lesson description
+      const description = document.querySelector('.description, .lesson-description, .course-description, [itemprop="description"]')?.innerText?.trim();
+      if (description) parts.push(`\n**Description:**\n${description.slice(0, 1500)}`);
+      
+      // Extract main content area
+      const mainContent = document.querySelector('main, article, .content, .lesson-content, .course-content, .module-content')?.innerText?.trim();
+      if (mainContent && mainContent.length > 200) {
+        parts.push(`\n**Main Content:**\n${mainContent.slice(0, 5000)}`);
+      }
+      
+      // Extract quiz questions if present
+      const quizQuestions = [...document.querySelectorAll('.quiz-question, .question-text, [class*="question"]')].map(q => q.innerText?.trim()).filter(Boolean);
+      if (quizQuestions.length > 0) {
+        parts.push(`\n**Quiz Questions:**\n${quizQuestions.join('\n---\n').slice(0, 2000)}`);
+      }
+      
+      // Extract code examples
+      const codeBlocks = [...document.querySelectorAll('pre code, pre, code')].map(c => c.innerText?.trim()).filter(Boolean);
+      if (codeBlocks.length > 0) {
+        parts.push(`\n**Code Examples:**\n${codeBlocks.slice(0, 5).join('\n---\n').slice(0, 3000)}`);
+      }
+      
+      // Extract slide/text content
+      const slides = document.querySelector('.slide-content, .presentation-content, .lecture-content')?.innerText?.trim();
+      if (slides) parts.push(`\n**Slide Content:**\n${slides.slice(0, 3000)}`);
+      
+      // Fallback: extract all readable text
+      if (parts.length < 3) {
+        const bodyText = document.body?.innerText?.trim();
+        if (bodyText && bodyText.length > 500) {
+          parts.push(`\n**Page Content:**\n${bodyText.slice(0, 6000)}`);
+        }
+      }
+      
+      return parts.filter(Boolean).join("\n\n");
     },
 
     extractArticle() {
@@ -203,7 +266,9 @@
       const type = this.detectPageType();
       const parts = [this.extractMeta(), this.analyzePageStats()];
 
-      if (type === "youtube") {
+      if (type === "course") {
+        parts.push(this.extractCourseContent());
+      } else if (type === "youtube") {
         parts.push(this.extractYouTube());
       } else if (type === "twitter") {
         parts.push(this.extractTwitter());
@@ -232,6 +297,7 @@
   let conversationHistory = [];
   let currentTheme = "dark";
   let deepThinkMode = false;
+  let currentSettings = null;
 
   /* ═══════════════════════════════════════════════
      BUILD SIDEBAR
@@ -344,11 +410,12 @@
     } catch (err) {
       bar.setAttribute("data-state", "error");
       txt.textContent = "Extraction failed";
+      console.error("LearnFlow extraction error:", err);
     }
   }
 
   /* ═══════════════════════════════════════════════
-     MESSAGING
+     MESSAGING — FIXED with proper error handling
   ═══════════════════════════════════════════════ */
   async function sendMessage(text) {
     if (!text) return;
@@ -366,19 +433,74 @@
       appendMessage("assistant", answer);
     } catch (err) {
       thinking.remove();
+      console.error("LearnFlow AI error:", err);
+      appendMessage("assistant", friendlyError(err));
+    }
+  }
+
+  // NEW: Handle screenshot capture and explanation
+  async function handleScreenshotExplain(imageData, selectionText) {
+    const thinking = showThinking(true);
+    try {
+      const prompt = selectionText 
+        ? `Explain what's shown in this screenshot. Also address this selected text: "${selectionText}"`
+        : "Explain what's shown in this screenshot in detail.";
+      
+      conversationHistory.push({ role: "user", content: prompt, image: imageData });
+      const answer = await callAIWithVision(imageData, prompt);
+      thinking.remove();
+      conversationHistory.push({ role: "assistant", content: answer });
+      appendMessage("assistant", answer);
+    } catch (err) {
+      thinking.remove();
+      console.error("LearnFlow screenshot error:", err);
+      appendMessage("assistant", friendlyError(err));
+    }
+  }
+
+  // NEW: Handle course content extraction and explanation
+  async function handleCourseExplain() {
+    const thinking = showThinking(true);
+    try {
+      const courseContent = Extractor.extractCourseContent();
+      const prompt = `This is course content from ${location.hostname}. Explain the key concepts, learning objectives, and main takeaways. Structure your response with:\n\n**Course Topic:** (what is being taught)\n**Key Concepts:** (3-5 main ideas)\n**Learning Objectives:** (what you should learn)\n**Important Details:** (specific facts, steps, or information)\n**Summary:** (brief recap)\n\nHere's the extracted content:\n\n${courseContent}`;
+      
+      conversationHistory.push({ role: "user", content: prompt });
+      const answer = await callAI();
+      thinking.remove();
+      conversationHistory.push({ role: "assistant", content: answer });
+      appendMessage("assistant", answer);
+    } catch (err) {
+      thinking.remove();
+      console.error("LearnFlow course extract error:", err);
       appendMessage("assistant", friendlyError(err));
     }
   }
 
   async function callAI() {
-    const stored = await chrome.storage.local.get(["settings"]);
+    // Load settings fresh each time
+    const stored = await chrome.storage.local.get(["settings"]).catch(err => {
+      console.error("Failed to load settings:", err);
+      return { settings: null };
+    });
+    
     const settings = stored.settings || {};
-    const provider = settings.activeProvider;
-    const model = settings.activeModel;
-    const key = settings.keys?.[provider];
-
-    if (!provider) throw new Error("No provider set — open the popup and go to Settings.");
-    if (!key) throw new Error("No API key — open the popup Settings and add your key.");
+    
+    // FIXED: Proper API key validation
+    const provider = settings.activeProvider || "groq";
+    const model = settings.activeModel || "llama-3.3-70b-versatile";
+    const keys = settings.keys || {};
+    const key = keys[provider];
+    
+    // Better error messages for missing keys
+    if (!provider) {
+      throw new Error("No provider selected. Go to LearnFlow Settings and choose a provider (Groq recommended).");
+    }
+    
+    if (!key || key.trim() === "") {
+      const providerNames = { groq: "Groq", gemini: "Gemini", openrouter: "OpenRouter", huggingface: "Hugging Face" };
+      throw new Error(`Missing API key for ${providerNames[provider] || provider}. Go to LearnFlow Settings → API Keys and add your ${provider} key.`);
+    }
 
     const ctx = currentPageContent || await Extractor.smartExtract(14000);
     const type = Extractor.detectPageType();
@@ -395,31 +517,113 @@
     throw new Error("Unknown provider: " + provider);
   }
 
+  // NEW: Vision-capable AI call (uses Gemini for screenshots)
+  async function callAIWithVision(imageData, prompt) {
+    const stored = await chrome.storage.local.get(["settings"]);
+    const settings = stored.settings || {};
+    const keys = settings.keys || {};
+    
+    // Always use Gemini for vision (Groq doesn't support images)
+    const geminiKey = keys.gemini;
+    if (!geminiKey) {
+      throw new Error("Screenshot explanation requires a Gemini API key. Go to Settings and add your Gemini key (free at aistudio.google.com).");
+    }
+    
+    const model = "gemini-2.0-flash"; // Vision-capable model
+    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+    
+    const body = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: "image/png", data: imageData } }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.95,
+        maxOutputTokens: 4096,
+      },
+    };
+    
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    
+    if (!resp.ok) {
+      const errorText = await resp.text().catch(() => "");
+      let errorData = {};
+      try { errorData = JSON.parse(errorText); } catch {}
+      
+      if (resp.status === 429) {
+        throw new Error("Gemini rate limit exceeded. Wait a moment or upgrade your API tier.");
+      }
+      if (resp.status === 403) {
+        throw new Error("Gemini API key invalid. Get a fresh key from aistudio.google.com");
+      }
+      throw new Error(errorData.error?.message || "Gemini HTTP " + resp.status);
+    }
+    
+    const d = await resp.json();
+    
+    if (!d.candidates || d.candidates.length === 0) {
+      if (d.promptFeedback?.blockReason) {
+        throw new Error("Gemini blocked: " + d.promptFeedback.blockReason);
+      }
+      throw new Error("No response from Gemini");
+    }
+    
+    const candidate = d.candidates[0];
+    if (candidate.finishReason === "SAFETY") {
+      throw new Error("Gemini response blocked by safety filters");
+    }
+    
+    return candidate.content?.parts?.[0]?.text || "";
+  }
+
+  // Industry-standard system prompt with best practices
   function buildSystemPrompt(ctx, type, pageStats) {
     const deepNote = deepThinkMode
-      ? "\n\nDEEP THINK MODE IS ACTIVE: Reason carefully and thoroughly. Think step by step. Provide comprehensive, well-structured, detailed analysis. Do not cut corners. Explain your reasoning."
-      : "";
+      ? "\n\n**DEEP THINK MODE ACTIVE:** Use extended reasoning. Think step-by-step. Provide comprehensive, well-structured analysis. Explain your reasoning clearly. Do not skip steps."
+      : "\n\n**MODE:** Standard — be concise but thorough.";
 
-    return `You are LearnFlow v3, an expert AI research assistant embedded in a Chrome extension. You have deep knowledge of the current webpage.
+    return `You are LearnFlow v5, an expert AI research assistant embedded in a Chrome extension. You analyze webpages and provide clear, accurate, well-structured explanations.
 
-PAGE METADATA:
+## YOUR ROLE
+- Ground all answers in the provided page content
+- Cite specific sections when making claims
+- Be analytical, not just descriptive
+- Admit when information is not in the page
+- Use general knowledge to supplement when appropriate
+
+## RESPONSE FORMAT
+- Use markdown: **bold** for emphasis, ## headers, bullet points, code blocks
+- Structure responses logically with clear sections
+- Keep explanations accessible but not simplistic
+- Define technical terms when first used
+
+## PAGE CONTEXT
 - Type: ${type}
 - URL: ${location.href}
 - Title: ${document.title}
 - Domain: ${location.hostname}
 ${deepNote}
 
-INSTRUCTIONS:
-- Be precise, thorough, and well-structured.
-- Use markdown: **bold**, bullet points, headers (##, ###), code blocks, tables.
-- Ground your answers in the actual page content provided below.
-- If the user asks about something not in the page, say so clearly but still help from your general knowledge.
-- For facts and claims, cite where in the page you found them when possible.
-- Be analytical, not just descriptive.
+## QUALITY STANDARDS
+1. **Accuracy:** Only state what you can verify from the content
+2. **Clarity:** Use plain language, short sentences, concrete examples
+3. **Completeness:** Address all parts of the user's question
+4. **Structure:** Organize with headers, lists, and logical flow
+5. **Evidence:** Reference specific parts of the page when possible
 
 === EXTRACTED PAGE CONTENT (${ctx.length} chars) ===
 ${ctx}
-=== END OF PAGE CONTENT ===`;
+=== END OF PAGE CONTENT ===
+
+Remember: The user is viewing this page right now. Help them understand it deeply.`;
   }
 
   /* ── Provider implementations ── */
@@ -428,7 +632,6 @@ ${ctx}
     const actualModel = model || "gemini-2.0-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${key}`;
     
-    // Enhanced Gemini call with generation config
     const contents = conversationHistory.slice(-16).map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
@@ -463,7 +666,7 @@ ${ctx}
       try { errorData = JSON.parse(errorText); } catch {}
       
       if (resp.status === 429) {
-        throw new Error("Gemini rate limit exceeded — free tier allows 15 requests/minute. Wait a moment or upgrade your API tier.");
+        throw new Error("Gemini rate limit exceeded — free tier allows 15 requests/minute. Wait a moment or upgrade.");
       }
       if (resp.status === 403) {
         throw new Error("Gemini API key invalid or expired — get a fresh key from aistudio.google.com");
@@ -495,12 +698,88 @@ ${ctx}
     const msgs = [{ role: "system", content: system }, ...conversationHistory.slice(-16)];
     const resp = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key, ...extraHeaders },
-      body: JSON.stringify({ model, max_tokens: 3000, messages: msgs }),
+      headers: { 
+        "Content-Type": "application/json", 
+        "Authorization": "Bearer " + key,
+        ...extraHeaders 
+      },
+      body: JSON.stringify({ 
+        model, 
+        max_tokens: deepThinkMode ? 4096 : 2048, 
+        temperature: deepThinkMode ? 0.7 : 0.5,
+        messages: msgs 
+      }),
     });
-    if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error?.message || "HTTP " + resp.status); }
+    
+    if (!resp.ok) { 
+      const e = await resp.json().catch(() => ({})); 
+      const errorMsg = e.error?.message || "HTTP " + resp.status;
+      
+      if (resp.status === 401 || resp.status === 403) {
+        throw new Error("Invalid API key — the key was rejected. Check your key in Settings.");
+      }
+      if (resp.status === 429) {
+        throw new Error("Rate limit hit — API is busy. Wait a moment and try again.");
+      }
+      if (resp.status === 402) {
+        throw new Error("Insufficient credits — your account has run out of credits.");
+      }
+      throw new Error(errorMsg); 
+    }
     const d = await resp.json();
     return d.choices?.[0]?.message?.content || "";
+  }
+
+  /* ═══════════════════════════════════════════════
+     ERROR HANDLING — Improved messages
+  ═══════════════════════════════════════════════ */
+  function friendlyError(err) {
+    const msg = (err.message || "").toLowerCase();
+    
+    // API Key errors (most common issue)
+    if (msg.includes("missing api key") || msg.includes("no api key")) {
+      return "❌ **Missing API Key**\n\n" + err.message + "\n\n💡 **Fix:** Open LearnFlow popup → Settings → API Keys → Add your key\n\n📝 Groq keys: https://console.groq.com/keys (free)\n💎 Gemini keys: https://aistudio.google.com/app/apikey (free tier)";
+    }
+    
+    if (msg.includes("invalid api key") || msg.includes("unauthorized") || msg.includes("401") || msg.includes("403")) {
+      return "❌ **Invalid API Key**\n\nThe API key was rejected by the provider.\n\n💡 **Fix:**\n1. Go to LearnFlow Settings\n2. Re-enter your API key\n3. Make sure there are no spaces\n4. Save and try again\n\n📝 Get a new key if needed:\n• Groq: https://console.groq.com/keys\n• Gemini: https://aistudio.google.com/app/apikey";
+    }
+    
+    // Rate limiting
+    if (msg.includes("rate limit") || msg.includes("quota") || msg.includes("429") || msg.includes("too many requests")) {
+      if (msg.includes("gemini")) {
+        return "❌ **Gemini Rate Limit**\n\nFree tier: 15 requests/minute.\n\n💡 Wait ~60 seconds and try again\n💡 Or switch to Groq for unlimited free requests";
+      }
+      return "❌ **Rate Limit Hit**\n\nYou've sent too many requests too quickly.\n\n💡 Wait 30-60 seconds and try again\n💡 Consider upgrading your API plan";
+    }
+    
+    // Credits/billing
+    if (msg.includes("insufficient") || msg.includes("credits") || msg.includes("balance") || msg.includes("402")) {
+      return "❌ **Out of Credits**\n\nYour API account has no credits left.\n\n💡 Top up at your provider's billing page\n💡 Or switch to Groq (free unlimited tier)";
+    }
+    
+    // Safety/content filters
+    if (msg.includes("blocked") || msg.includes("safety") || msg.includes("content policy")) {
+      return "⚠️ **Content Filtered**\n\nThe AI provider blocked this request due to safety policies.\n\n💡 Try rephrasing your question\n💡 Use different wording";
+    }
+    
+    // Network errors
+    if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("load failed")) {
+      return "❌ **Network Error**\n\nCouldn't reach the API.\n\n💡 Check your internet connection\n💡 Try again in a moment\n💡 Make sure you're not behind a firewall";
+    }
+    
+    // Model errors
+    if (msg.includes("model not found") || msg.includes("no such model") || msg.includes("invalid model")) {
+      return "❌ **Model Not Found**\n\nThe selected model is unavailable.\n\n💡 Go to Settings and choose a different model\n💡 Groq's `llama-3.3-70b-versatile` is recommended";
+    }
+    
+    // Context length
+    if (msg.includes("context length") || (msg.includes("token") && msg.includes("exceed"))) {
+      return "❌ **Content Too Large**\n\nThe page exceeds the model's context limit.\n\n💡 Try a more specific question\n💡 Use Deep Think mode for better handling";
+    }
+    
+    // Default
+    return "❌ **Error:** " + err.message + "\n\n💡 Try again or check your Settings";
   }
 
   /* ═══════════════════════════════════════════════
@@ -535,39 +814,6 @@ ${ctx}
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  function friendlyError(err) {
-    const msg = (err.message || "").toLowerCase();
-    
-    // Gemini-specific errors first
-    if (msg.includes("gemini") || msg.includes("generativelanguage")) {
-      if (msg.includes("rate limit") || msg.includes("quota") || msg.includes("429"))
-        return "❌ **Gemini Rate Limit** — you've hit the API quota.\n\n💡 Free tier: 15 requests/minute. Wait ~1 minute or upgrade at aistudio.google.com\n\n🔄 Or switch to Groq/OpenRouter for unlimited free requests.";
-      if (msg.includes("api key") || msg.includes("unauthorized") || msg.includes("403"))
-        return "❌ **Invalid Gemini API Key** — the key was rejected.\n\n💡 Get a fresh key: https://aistudio.google.com/app/apikey\n\n📝 Keys start with `AIza…`";
-      if (msg.includes("blocked") || msg.includes("safety"))
-        return "⚠️ **Content Filtered** — Gemini blocked this request due to safety policies.\n\n💡 Try rephrasing your question or use a different provider.";
-      if (msg.includes("invalid request") || msg.includes("400"))
-        return "❌ **Invalid Request** — Gemini rejected the request format.\n\n💡 Try a simpler question or switch models.";
-    }
-    
-    // Generic errors
-    if (msg.includes("insufficient balance") || msg.includes("insufficient_balance") || msg.includes("out of credits"))
-      return "❌ Insufficient balance — your API key has run out of credits.\n\n💡 Top up at the provider's billing page, or switch to a free provider like **Groq** or **OpenRouter** in Settings.";
-    if (msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("unauthorized") || msg.includes("authentication"))
-      return "❌ Invalid API key — the key was rejected by the provider.\n\n💡 Open the popup → Settings → re-enter your key.";
-    if (msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("429"))
-      return "❌ Rate limit hit — you've sent too many requests.\n\n💡 Wait a moment and try again, or switch to a different provider.";
-    if (msg.includes("quota") || msg.includes("limit exceeded"))
-      return "❌ Quota exceeded — you've hit your plan's usage limit.\n\n💡 Check your usage dashboard or switch to a free provider like Groq or OpenRouter.";
-    if (msg.includes("model not found") || msg.includes("no such model"))
-      return "❌ Model not found — the selected model may be unavailable.\n\n💡 Go to Settings and choose a different model.";
-    if (msg.includes("context length") || msg.includes("token") && msg.includes("exceed"))
-      return "❌ Page too large — the content exceeds the model's context limit.\n\n💡 Try a simpler question, or use a model with a larger context window.";
-    if (msg.includes("network") || msg.includes("failed to fetch") || msg.includes("load failed"))
-      return "❌ Network error — couldn't reach the API.\n\n💡 Check your internet connection and try again.";
-    return "❌ Error: " + err.message;
-  }
-
   function renderMd(text) {
     return escHtml(text)
       .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
@@ -598,9 +844,9 @@ ${ctx}
   }
 
   /* ═══════════════════════════════════════════════
-     SELECTION TOOLTIP
+     SELECTION TOOLTIP — FIXED with retry logic
   ═══════════════════════════════════════════════ */
-  let tooltip = null, hideTimeout;
+  let tooltip = null, hideTimeout, lastRequestTime = 0;
 
   function buildTooltip() {
     const t = document.createElement("div");
@@ -623,13 +869,21 @@ ${ctx}
       const sel = window.getSelection();
       const text = sel?.toString().trim();
       if (!text || text.length < 5) { hideTooltip(); return; }
+      
+      // Check if tooltip exists
       if (!tooltip) tooltip = buildTooltip();
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      tooltip.style.left = Math.max(0, Math.min(rect.left, window.innerWidth - 320)) + "px";
+      
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      
+      // Position tooltip above selection
+      tooltip.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 320)) + "px";
       tooltip.style.top = rect.top + window.scrollY - 46 + "px";
       tooltip.classList.add("visible");
+      
+      // Set up button handlers with retry logic
       tooltip.querySelectorAll(".bh-sel-btn").forEach((btn) => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
           const prompts = {
             explain: `Explain this in depth with context, examples, and significance: "${text}"`,
             summarize: `Summarize this in 2-3 sentences, capturing the key idea: "${text}"`,
@@ -638,11 +892,36 @@ ${ctx}
             translate: `Translate to English (or French if already English): "${text}"`,
             deep: `Perform a comprehensive deep analysis of this text — meaning, context, implications, related concepts, what it reveals: "${text}"`,
           };
-          const wasDeep = btn.dataset.action === "deep";
+          
           hideTooltip();
+          
+          const wasDeep = btn.dataset.action === "deep";
           if (!sidebarOpen) toggleSidebar(true);
           if (wasDeep) deepThinkMode = true;
-          setTimeout(() => sendMessage(prompts[btn.dataset.action]), 400);
+          
+          // Wait for sidebar to open
+          await new Promise(resolve => setTimeout(resolve, 400));
+          
+          // FIXED: Add retry logic for failed requests
+          const maxRetries = 2;
+          let attempt = 0;
+          let success = false;
+          
+          while (attempt <= maxRetries && !success) {
+            try {
+              await sendMessage(prompts[btn.dataset.action]);
+              success = true;
+              lastRequestTime = Date.now();
+            } catch (err) {
+              attempt++;
+              if (attempt <= maxRetries) {
+                console.log(`LearnFlow: Retrying request (attempt ${attempt}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+              } else {
+                console.error("LearnFlow: All retry attempts failed");
+              }
+            }
+          }
         };
       });
     }, 80);
@@ -659,11 +938,84 @@ ${ctx}
     if (e.key === "Escape" && sidebarOpen) toggleSidebar(false);
   });
 
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === "toggleSidebar") toggleSidebar();
+  /* ═══════════════════════════════════════════════
+     MESSAGE LISTENER — NEW handlers for screenshot & course
+  ═══════════════════════════════════════════════ */
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === "toggleSidebar") {
+      toggleSidebar();
+      sendResponse({ ok: true });
+      return true;
+    }
+    
     if (msg.action === "sendPrompt" && msg.prompt) {
       if (!sidebarOpen) toggleSidebar(true);
       setTimeout(() => sendMessage(msg.prompt), 500);
+      sendResponse({ ok: true });
+      return true;
     }
+    
+    // NEW: Handle screenshot capture request
+    if (msg.action === "captureAndExplain") {
+      captureScreenshot().then(imageData => {
+        handleScreenshotExplain(imageData, msg.selection);
+      }).catch(err => {
+        console.error("Screenshot capture failed:", err);
+        if (!sidebarOpen) toggleSidebar(true);
+        setTimeout(() => {
+          sendMessage("Screenshot capture failed: " + err.message + ". Try using 'Extract & Explain Course Content' instead for text-based extraction.");
+        }, 500);
+      });
+      sendResponse({ ok: true });
+      return true;
+    }
+    
+    // NEW: Handle course extraction request
+    if (msg.action === "extractAndExplainCourse") {
+      if (!sidebarOpen) toggleSidebar(true);
+      setTimeout(() => handleCourseExplain(), 500);
+      sendResponse({ ok: true });
+      return true;
+    }
+    
+    // Handle screenshot data from background
+    if (msg.action === "processScreenshot" && msg.imageData) {
+      handleScreenshotExplain(msg.imageData, "");
+      sendResponse({ ok: true });
+      return true;
+    }
+    
+    sendResponse({ ok: true });
+    return true;
   });
+
+  // NEW: Screenshot capture function
+  async function captureScreenshot() {
+    return new Promise((resolve, reject) => {
+      try {
+        // Use chrome.tabs.captureVisibleTab via background script
+        chrome.runtime.sendMessage({ 
+          action: "captureVisibleTab",
+          format: "png"
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (response && response.error) {
+            reject(new Error(response.error));
+          } else if (response && response.dataUrl) {
+            // Extract base64 data from data URL
+            const base64Data = response.dataUrl.split(',')[1];
+            resolve(base64Data);
+          } else {
+            reject(new Error("No screenshot data received"));
+          }
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // Auto-initialize
+  console.log("LearnFlow v5 content script loaded");
 })();
