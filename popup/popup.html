@@ -207,6 +207,7 @@
 
 <div class="tabs">
   <button class="tab active" data-tab="ask">Ask</button>
+  <button class="tab" data-tab="history">History</button>
   <button class="tab" data-tab="settings">Settings</button>
 </div>
 
@@ -251,6 +252,24 @@
       <div class="chip" data-action="sidebar">⚡ Full Sidebar</div>
     </div>
     <button class="sidebar-btn" id="openSidebarBtn">⚡ Open Full Research Sidebar</button>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="panel" id="panel-history">
+  <div style="padding:10px 14px 14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div class="section-label" style="margin:0;">// conversation history</div>
+      <button class="history-clear" id="clearHistoryBtn">clear all</button>
+    </div>
+    <div id="historyList">
+      <!-- History items will be inserted here -->
+    </div>
+    <div class="empty-state" id="historyEmpty">
+      <div class="empty-icon">💭</div>
+      <div>No conversations yet</div>
+      <div style="margin-top:4px;">Ask a question to start building your history</div>
+    </div>
   </div>
 </div>
 

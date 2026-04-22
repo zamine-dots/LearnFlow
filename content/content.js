@@ -313,7 +313,7 @@
         <div id="bh-page-type">${Extractor.detectPageType()}</div>
         <div id="bh-header-btns">
           <button class="bh-icon-btn" id="bh-deep-btn" title="Toggle Deep Think mode">🧠</button>
-          <button class="bh-icon-btn" id="bh-theme-btn" title="Toggle theme">☀</button>
+          <button class="bh-icon-btn" id="bh-theme-btn" title="Toggle theme">💡</button>
           <button class="bh-icon-btn" id="bh-clear-btn" title="Clear chat">↺</button>
           <button class="bh-icon-btn" id="bh-close-btn" title="Close">✕</button>
         </div>
@@ -366,7 +366,19 @@
     sidebar.querySelector("#bh-theme-btn").onclick = () => {
       currentTheme = currentTheme === "dark" ? "light" : "dark";
       sidebar.setAttribute("data-theme", currentTheme);
-      sidebar.querySelector("#bh-theme-btn").textContent = currentTheme === "dark" ? "☀" : "☾";
+      // FIXED: Changed from sun/moon to lightbulb/night moon
+      sidebar.querySelector("#bh-theme-btn").textContent = currentTheme === "dark" ? "💡" : "🌙";
+      
+      // Sync theme to popup and storage
+      try {
+        chrome.storage.local.set({ theme: currentTheme });
+        chrome.runtime.sendMessage({ 
+          action: "syncThemeToPopup", 
+          theme: currentTheme 
+        }).catch(() => {}); // Ignore if popup not open
+      } catch (err) {
+        console.log("LearnFlow: Could not sync theme to popup", err);
+      }
     };
     sidebar.querySelector("#bh-deep-btn").onclick = () => {
       deepThinkMode = !deepThinkMode;
@@ -478,19 +490,32 @@
   }
 
   async function callAI() {
-    // Load settings fresh each time
-    const stored = await chrome.storage.local.get(["settings"]).catch(err => {
-      console.error("Failed to load settings:", err);
-      return { settings: null };
-    });
-    
-    const settings = stored.settings || {};
+    // Load settings fresh each time with error handling
+    let stored, settings;
+    try {
+      stored = await chrome.storage.local.get(["settings"]);
+      settings = stored.settings || {};
+    } catch (err) {
+      console.error("LearnFlow: Failed to load settings:", err);
+      throw new Error("Failed to load settings. Make sure the extension has storage permission and is properly loaded.");
+    }
     
     // FIXED: Proper API key validation
     const provider = settings.activeProvider || "groq";
-    const model = settings.activeModel || "llama-3.3-70b-versatile";
     const keys = settings.keys || {};
     const key = keys[provider];
+    
+    // FIXED: Get correct default model for each provider
+    let model;
+    if (provider === "groq") {
+      model = settings.activeModel || "llama-3.3-70b-versatile";
+    } else if (provider === "gemini") {
+      model = settings.activeModel || "gemini-2.5-flash";
+    } else if (provider === "openrouter") {
+      model = settings.activeModel || "meta-llama/llama-3.3-70b-instruct";
+    } else {
+      model = settings.activeModel || "llama-3.3-70b-versatile";
+    }
     
     // Better error messages for missing keys
     if (!provider) {
@@ -519,9 +544,15 @@
 
   // NEW: Vision-capable AI call (uses Gemini for screenshots)
   async function callAIWithVision(imageData, prompt) {
-    const stored = await chrome.storage.local.get(["settings"]);
-    const settings = stored.settings || {};
-    const keys = settings.keys || {};
+    let stored, settings, keys;
+    try {
+      stored = await chrome.storage.local.get(["settings"]);
+      settings = stored.settings || {};
+      keys = settings.keys || {};
+    } catch (err) {
+      console.error("LearnFlow: Failed to load settings:", err);
+      throw new Error("Failed to load settings. Please reload the extension.");
+    }
     
     // Always use Gemini for vision (Groq doesn't support images)
     const geminiKey = keys.gemini;
@@ -529,7 +560,8 @@
       throw new Error("Screenshot explanation requires a Gemini API key. Go to Settings and add your Gemini key (free at aistudio.google.com).");
     }
     
-    const model = "gemini-2.0-flash"; // Vision-capable model
+    // FIXED: Use latest Gemini 2.5 model
+    const model = "gemini-2.5-flash"; // Latest available model
     
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
     
@@ -629,8 +661,15 @@ Remember: The user is viewing this page right now. Help them understand it deepl
   /* ── Provider implementations ── */
 
   async function callGemini(key, model, system) {
-    const actualModel = model || "gemini-2.0-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${key}`;
+    // FIXED: Use correct Gemini 2.5 model names
+    let geminiModel = model || "gemini-2.5-flash"; // Default to latest
+    
+    // Ensure we're using a valid Gemini model name (not Groq names)
+    if (geminiModel.includes("llama") || geminiModel.includes("groq")) {
+      geminiModel = "gemini-2.5-flash"; // Fallback to latest Gemini model
+    }
+    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`;
     
     const contents = conversationHistory.slice(-16).map(m => ({
       role: m.role === "assistant" ? "model" : "user",
@@ -654,44 +693,83 @@ Remember: The user is viewing this page right now. Help them understand it deepl
       ],
     };
     
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
+    console.log("LearnFlow: Calling Gemini model:", geminiModel);
     
-    if (!resp.ok) {
-      const errorText = await resp.text().catch(() => "");
-      let errorData = {};
-      try { errorData = JSON.parse(errorText); } catch {}
-      
-      if (resp.status === 429) {
-        throw new Error("Gemini rate limit exceeded — free tier allows 15 requests/minute. Wait a moment or upgrade.");
+    // FIXED: Retry logic with exponential backoff for 503 errors
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => "");
+          let errorData = {};
+          try { errorData = JSON.parse(errorText); } catch {}
+          
+          // Retry on 503 (server busy) or 429 (rate limit) with backoff
+          if ((resp.status === 503 || resp.status === 429) && attempt < maxRetries) {
+            const waitMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+            console.log(`LearnFlow: Gemini ${resp.status} error, retrying in ${waitMs}ms (attempt ${attempt}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+            continue; // Retry
+          }
+          
+          // Handle specific errors
+          if (resp.status === 503 || (errorData.error?.status === "UNAVAILABLE")) {
+            throw new Error("Gemini is temporarily busy (high demand). Please try again in 30-60 seconds, or switch to Groq for more reliable service.");
+          }
+          if (resp.status === 429) {
+            throw new Error("Gemini rate limit exceeded — free tier allows 15 requests/minute. Wait ~60 seconds and try again.");
+          }
+          if (resp.status === 403) {
+            throw new Error("Gemini API key invalid or expired — get a fresh key from aistudio.google.com");
+          }
+          if (resp.status === 400) {
+            const errorMsg = errorData.error?.message || errorText;
+            if (errorMsg.includes("models/")) {
+              throw new Error(`Invalid Gemini model: "${geminiModel}". Check Settings.`);
+            }
+            throw new Error("Gemini invalid request: " + errorMsg);
+          }
+          throw new Error(errorData.error?.message || "Gemini HTTP " + resp.status);
+        }
+        
+        const d = await resp.json();
+        
+        if (!d.candidates || d.candidates.length === 0) {
+          if (d.promptFeedback?.blockReason) {
+            throw new Error("Gemini blocked this content: " + d.promptFeedback.blockReason);
+          }
+          throw new Error("No response from Gemini");
+        }
+        
+        const candidate = d.candidates[0];
+        if (candidate.finishReason === "SAFETY") {
+          throw new Error("Gemini response blocked by safety filters");
+        }
+        
+        return candidate.content?.parts?.[0]?.text || "";
+        
+      } catch (err) {
+        lastError = err;
+        // Don't retry on non-retryable errors
+        if (err.message.includes("invalid") || err.message.includes("blocked") || err.message.includes("key")) {
+          throw err;
+        }
+        // If this was the last attempt, throw the error
+        if (attempt === maxRetries) {
+          throw lastError;
+        }
       }
-      if (resp.status === 403) {
-        throw new Error("Gemini API key invalid or expired — get a fresh key from aistudio.google.com");
-      }
-      if (resp.status === 400) {
-        throw new Error("Gemini invalid request: " + (errorData.error?.details?.[0]?.reason || errorText));
-      }
-      throw new Error(errorData.error?.message || "Gemini HTTP " + resp.status);
     }
     
-    const d = await resp.json();
-    
-    if (!d.candidates || d.candidates.length === 0) {
-      if (d.promptFeedback?.blockReason) {
-        throw new Error("Gemini blocked this content: " + d.promptFeedback.blockReason);
-      }
-      throw new Error("No response from Gemini");
-    }
-    
-    const candidate = d.candidates[0];
-    if (candidate.finishReason === "SAFETY") {
-      throw new Error("Gemini response blocked by safety filters");
-    }
-    
-    return candidate.content?.parts?.[0]?.text || "";
+    throw lastError || new Error("Gemini request failed after retries");
   }
 
   async function callOpenAICompat(url, key, model, system, extraHeaders = {}) {
@@ -944,6 +1022,18 @@ Remember: The user is viewing this page right now. Help them understand it deepl
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === "toggleSidebar") {
       toggleSidebar();
+      sendResponse({ ok: true });
+      return true;
+    }
+    
+    // NEW: Sync theme from popup
+    if (msg.action === "syncTheme" && msg.theme) {
+      currentTheme = msg.theme;
+      const sidebar = document.getElementById("learnflow-sidebar");
+      if (sidebar) {
+        sidebar.setAttribute("data-theme", currentTheme);
+        sidebar.querySelector("#bh-theme-btn").textContent = currentTheme === "dark" ? "💡" : "🌙";
+      }
       sendResponse({ ok: true });
       return true;
     }

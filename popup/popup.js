@@ -20,8 +20,8 @@ const PROVIDERS = {
     keyUrl: "https://aistudio.google.com/app/apikey",
     placeholder: "AIza…",
     keyLabel: "Gemini API Key",
-    defaultModel: "gemini-2.0-flash",
-    modelLabel: "Gemini 2.0 Flash (vision support)",
+    defaultModel: "gemini-2.5-flash", // UPDATED: Latest available model
+    modelLabel: "Gemini 2.5 Flash (latest & fastest)",
     supportsVision: true,
   },
   openrouter: {
@@ -31,8 +31,8 @@ const PROVIDERS = {
     keyUrl: "https://openrouter.ai/keys",
     placeholder: "sk-or-…",
     keyLabel: "OpenRouter API Key",
-    defaultModel: "meta-llama/llama-3.3-70b-instruct",
-    modelLabel: "Multiple models available",
+    defaultModel: "meta-llama/llama-3.3-70b-instruct", // FIXED: Correct OpenRouter model ID
+    modelLabel: "Llama 3.3 70B Instruct (via OpenRouter)",
     supportsVision: false,
   },
 };
@@ -48,9 +48,9 @@ const QUICK_ACTIONS = {
 };
 
 /* ── State ────────────────────────────────────────────── */
+// FIXED: Removed placeholder apiKey, only use keys object
 let settings = { 
-  apiKey: "", 
-  keys: {},  // FIXED: Support multiple provider keys
+  keys: {},  // Only store actual keys here
   activeProvider: "groq",
   includeContext: true, 
   selectionSidebar: true, 
@@ -58,10 +58,12 @@ let settings = {
   deepThink: false 
 };
 let currentResponse = "", currentTheme = "dark";
+let conversationHistory = []; // NEW: Store conversation history
 
 /* ── Init ─────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", async () => {
   await load();
+  await loadHistory(); // NEW: Load conversation history
   applyTheme(currentTheme);
   updateStatus();
   setupListeners();
@@ -78,14 +80,19 @@ async function load() {
   
   if (data.settings) {
     settings = { ...settings, ...data.settings };
-    // FIXED: Ensure keys object exists
+    // FIXED: Ensure keys object exists, remove old apiKey
     if (!settings.keys) settings.keys = {};
-    // FIXED: Migrate old apiKey to keys.groq if needed
-    if (settings.apiKey && !settings.keys.groq) {
-      settings.keys.groq = settings.apiKey;
+    if (settings.apiKey) {
+      // Migrate old apiKey to groq if no keys exist
+      if (!settings.keys.groq) settings.keys.groq = settings.apiKey;
+      delete settings.apiKey; // Remove deprecated field
     }
   }
-  if (data.theme) currentTheme = data.theme;
+  if (data.theme) {
+    currentTheme = data.theme;
+    // Sync theme to content script if available
+    syncThemeToContentScript(currentTheme);
+  }
 
   setToggle("toggleContext", settings.includeContext);
   setToggle("toggleSelection", settings.selectionSidebar);
@@ -97,6 +104,61 @@ async function load() {
     document.querySelectorAll(".provider-option").forEach(opt => {
       opt.classList.toggle("active", opt.dataset.provider === settings.activeProvider);
     });
+  }
+}
+
+// NEW: Load conversation history
+async function loadHistory() {
+  try {
+    const data = await chrome.storage.local.get(["conversationHistory"]);
+    conversationHistory = data.conversationHistory || [];
+    renderHistory();
+  } catch (err) {
+    console.error("Failed to load history:", err);
+    conversationHistory = [];
+    renderHistory();
+  }
+}
+
+// NEW: Save conversation history
+async function saveHistory() {
+  try {
+    await chrome.storage.local.set({ conversationHistory });
+  } catch (err) {
+    console.error("Failed to save history:", err);
+  }
+}
+
+// NEW: Add to history
+function addToHistory(question, answer, provider) {
+  const item = {
+    id: Date.now(),
+    question,
+    answer,
+    provider,
+    timestamp: new Date().toISOString(),
+    url: location.href // Current page URL
+  };
+  conversationHistory.unshift(item); // Add to beginning
+  if (conversationHistory.length > 50) {
+    conversationHistory = conversationHistory.slice(0, 50); // Keep last 50
+  }
+  saveHistory();
+  renderHistory();
+}
+
+// NEW: Sync theme to content script (sidebar)
+async function syncThemeToContentScript(theme) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { 
+        action: "syncTheme", 
+        theme: theme 
+      }).catch(() => {}); // Ignore if content script not loaded
+    }
+  } catch (err) {
+    // Silently fail - content script might not be loaded
   }
 }
 
@@ -114,9 +176,14 @@ async function save() {
 
 /* ── Theme ────────────────────────────────────────────── */
 function applyTheme(t) {
+  currentTheme = t; // Update global state
   document.documentElement.setAttribute("data-theme", t);
   const btn = document.getElementById("themeToggle");
-  if (btn) btn.textContent = t === "dark" ? "☀" : "☾";
+  if (btn) btn.textContent = t === "dark" ? "💡" : "🌙";
+  
+  // Save and sync to content script
+  chrome.storage.local.set({ theme: t });
+  syncThemeToContentScript(t);
 }
 
 /* ── Deep Think UI ────────────────────────────────────── */
@@ -201,6 +268,60 @@ function switchToSettings() {
   document.getElementById("panel-settings").classList.add("active");
 }
 
+// NEW: Render conversation history
+function renderHistory() {
+  const historyList = document.getElementById("historyList");
+  const historyEmpty = document.getElementById("historyEmpty");
+  
+  if (!historyList) return;
+  
+  if (conversationHistory.length === 0) {
+    historyList.style.display = "none";
+    if (historyEmpty) historyEmpty.style.display = "block";
+    return;
+  }
+  
+  historyList.style.display = "block";
+  if (historyEmpty) historyEmpty.style.display = "none";
+  
+  historyList.innerHTML = conversationHistory.slice(0, 20).map(item => {
+    const date = new Date(item.timestamp);
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const provider = PROVIDERS[item.provider] || { emoji: '⚙' };
+    
+    return `
+      <div class="history-item" data-id="${item.id}">
+        <div class="history-q">${escapeHtml(item.question)}</div>
+        <div class="history-meta">${provider.emoji} ${item.provider} • ${timeStr}</div>
+      </div>
+    `;
+  }).join("");
+  
+  // Add click handlers
+  historyList.querySelectorAll(".history-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const id = parseInt(item.dataset.id);
+      const conv = conversationHistory.find(c => c.id === id);
+      if (conv) {
+        // Switch to ask tab and show this conversation
+        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        document.querySelector(".tab[data-tab='ask']").classList.add("active");
+        document.getElementById("panel-ask").classList.add("active");
+        
+        document.getElementById("questionInput").value = conv.question;
+        showResponse(conv.answer);
+      }
+    });
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 /* ── Listeners ────────────────────────────────────────── */
 function setupListeners() {
   document.querySelectorAll(".tab").forEach(btn => {
@@ -215,7 +336,18 @@ function setupListeners() {
   document.getElementById("themeToggle").addEventListener("click", () => {
     currentTheme = currentTheme === "dark" ? "light" : "dark";
     applyTheme(currentTheme);
-    chrome.storage.local.set({ theme: currentTheme });
+  });
+  
+  // Listen for theme sync from content script (sidebar)
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === "syncThemeToPopup" && msg.theme) {
+      currentTheme = msg.theme;
+      applyTheme(currentTheme);
+      sendResponse({ ok: true });
+      return true;
+    }
+    sendResponse({ ok: true });
+    return true;
   });
 
   const deepThinkBtn = document.getElementById("deepThinkBtn");
@@ -250,15 +382,43 @@ function setupListeners() {
     if (currentResponse) downloadText(currentResponse, "learnflow-response.txt", "text/plain");
   });
 
-  ["toggleContext","toggleSelection","toggleAutoSumm","toggleDeepThink"].forEach(id => {
-    document.getElementById(id)?.addEventListener("click", () => {
-      document.getElementById(id).classList.toggle("on");
-      save();
-      if (id === "toggleDeepThink") {
-        settings.deepThink = getToggle("toggleDeepThink");
-        updateDeepThinkUI();
-      }
-    });
+  // FIXED: Behavior toggles - actually save settings
+  document.getElementById("toggleContext")?.addEventListener("click", () => {
+    document.getElementById("toggleContext").classList.toggle("on");
+    settings.includeContext = getToggle("toggleContext");
+    save();
+  });
+  
+  document.getElementById("toggleSelection")?.addEventListener("click", () => {
+    document.getElementById("toggleSelection").classList.toggle("on");
+    settings.selectionSidebar = getToggle("toggleSelection");
+    save();
+  });
+  
+  document.getElementById("toggleAutoSumm")?.addEventListener("click", () => {
+    document.getElementById("toggleAutoSumm").classList.toggle("on");
+    settings.autoSummarize = getToggle("toggleAutoSumm");
+    save();
+  });
+  
+  document.getElementById("toggleDeepThink")?.addEventListener("click", () => {
+    document.getElementById("toggleDeepThink").classList.toggle("on");
+    settings.deepThink = getToggle("toggleDeepThink");
+    updateDeepThinkUI();
+    save();
+  });
+  
+  // NEW: Clear history button
+  document.getElementById("clearHistoryBtn")?.addEventListener("click", () => {
+    if (conversationHistory.length === 0) {
+      alert("No history to clear");
+      return;
+    }
+    if (confirm("Clear all conversation history? This cannot be undone.")) {
+      conversationHistory = [];
+      saveHistory();
+      renderHistory();
+    }
   });
 
   // Provider selection
@@ -410,6 +570,9 @@ async function handleAsk() {
     
     currentResponse = answer;
     showResponse(answer);
+    
+    // NEW: Save to conversation history
+    addToHistory(q, answer, settings.activeProvider);
   } catch (err) {
     showResponse(friendlyError(err));
   }
@@ -420,7 +583,32 @@ async function callGenericProvider(providerId, question, system, isDeep) {
   if (!key) throw new Error(`No API key for ${providerId}`);
   
   const provider = PROVIDERS[providerId];
-  const model = settings.activeModel || provider.defaultModel;
+  let model = settings.activeModel || provider.defaultModel;
+  
+  // FIXED: Bulletproof model validation for each provider
+  if (providerId === "gemini") {
+    // Gemini: Must NOT contain Groq model names
+    if (model.includes("llama") || model.includes("groq") || model.includes("versatile") || !model.includes("gemini")) {
+      model = "gemini-2.5-flash"; // Fallback to valid Gemini model
+    }
+    console.log("LearnFlow Popup: Calling Gemini model:", model);
+  }
+  
+  if (providerId === "openrouter") {
+    // OpenRouter: MUST contain "/" separator, must NOT be Groq format
+    if (!model.includes("/") || model.includes("groq") || model.includes("versatile")) {
+      model = "meta-llama/llama-3.3-70b-instruct"; // Default OpenRouter model
+    }
+    console.log("LearnFlow Popup: Calling OpenRouter model:", model);
+  }
+  
+  if (providerId === "groq") {
+    // Groq: Should NOT contain "/" (that's OpenRouter format)
+    if (model.includes("/") || model.includes("gemini")) {
+      model = "llama-3.3-70b-versatile"; // Default Groq model
+    }
+    console.log("LearnFlow Popup: Calling Groq model:", model);
+  }
   
   let url, headers = { "Content-Type": "application/json" };
   

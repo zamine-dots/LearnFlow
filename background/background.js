@@ -1,24 +1,33 @@
-// LearnFlow Background Service Worker v4.2 — Guaranteed Context Menu Registration
+// LearnFlow Background Service Worker v5.5 — Guaranteed Context Menu Registration
+
+console.log("🦎 LearnFlow Background v5.5 loading...");
 
 // Immediately create menus when service worker starts
 createContextMenuItems();
 
 // Also create on install/update
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log("LearnFlow: Extension installed/updated", details.reason);
+  console.log("✅ LearnFlow: Extension installed/updated", details.reason);
   createContextMenuItems();
 });
 
 // Recreate on browser startup
 chrome.runtime.onStartup.addListener(() => {
-  console.log("LearnFlow: Browser started");
+  console.log("✅ LearnFlow: Browser started, creating menus");
   createContextMenuItems();
 });
 
 // Function to create all context menu items
 function createContextMenuItems() {
+  console.log("📋 LearnFlow: Creating context menus...");
+  
   // Remove all existing menus first (prevents duplicates and ensures clean state)
   chrome.contextMenus.removeAll(() => {
+    if (chrome.runtime.lastError) {
+      console.error("❌ LearnFlow: Failed to remove old menus:", chrome.runtime.lastError);
+      return;
+    }
+    
     const menus = [
       // Selection context menus
       {
@@ -62,17 +71,19 @@ function createContextMenuItems() {
     ];
 
     // Create all menus
+    let created = 0;
     menus.forEach(menu => {
       chrome.contextMenus.create(menu, (menuId) => {
         if (chrome.runtime.lastError) {
-          console.error("LearnFlow: Failed to create menu", menu.id, chrome.runtime.lastError);
+          console.error("❌ LearnFlow: Failed to create menu", menu.id, chrome.runtime.lastError);
         } else {
-          console.log("LearnFlow: Created menu", menuId);
+          console.log("✅ LearnFlow: Created menu", menuId, "-", menu.title);
+          created++;
         }
       });
     });
 
-    console.log("LearnFlow: Context menu creation initiated");
+    console.log(`📋 LearnFlow: Context menu creation complete (${created}/${menus.length} menus created)`);
   });
 }
 
